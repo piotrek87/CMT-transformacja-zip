@@ -1,5 +1,6 @@
 # Menu: tylko zipy z CMT + transformacja (ownerzy, daty, pola nie z celu)
 # Uruchom: MigracjaCMT.bat lub MigracjaCMT.exe (Build-Exe.ps1)
+# Zasada: w stringach tylko ASCII - cudzyslowy " i ', myslnik - (nie en-dash). Zapobiega bledom parsera.
 
 $ErrorActionPreference = 'Stop'
 try {

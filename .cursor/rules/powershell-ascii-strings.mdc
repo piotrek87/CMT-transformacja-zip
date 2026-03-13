@@ -1,0 +1,15 @@
+---
+description: W plikach PowerShell uzywaj tylko ASCII w stringach - zero bledow parsera
+globs: "**/*.ps1"
+alwaysApply: false
+---
+
+# PowerShell - tylko ASCII w stringach
+
+Przy pisaniu i edycji plikow `.ps1` w tym projekcie:
+
+- **Cudzyslowy:** uzywaj wyłącznie znaków ASCII: `"` (U+0022) i `'` (U+0027). Nigdy nie wstawiaj „mądrych” cudzysłowów Unicode (`"` `"` `'` `'`).
+- **Myślnik:** uzywaj wyłącznie hyphen-minus `-` (U+002D). Nigdy nie uzywaj en-dash `–` (U+2013) ani em-dash `—` (U+2014).
+- **Skutek:** parser PowerShell traktuje tylko ASCII `"` jako zamykajacy string; znaki Unicode w stringu powoduja blad "The string is missing the terminator" i lamia skrypt.
+
+Jesli edytor automatycznie zamienia cudzyslowy lub myslniki na „typograficzne”, wylacz te opcje dla plikow .ps1 albo po edycji zamien znaki na ASCII.

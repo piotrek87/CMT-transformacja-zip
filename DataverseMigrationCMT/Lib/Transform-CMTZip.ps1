@@ -1,6 +1,7 @@
 # Przetwarza zip CMT: podmiana ownerow (IdMap), zachowanie dat, usuniecie pol nieistniejacych w celu.
 # Uzycie: .\Transform-CMTZip.ps1 -InputZipPath C:\...\CMT_Export.zip [-OutputZipPath ...] [-IdMapPath ...] [-TargetConnectionString ...] [-StripFieldsNotInTarget]
-# Albo: -ConfigPath ...\CMTConfig.ps1 (wtedy cel i StripFieldsNotInTarget z configu – zalecane przy uruchomieniu z menu).
+# Albo: -ConfigPath ...\CMTConfig.ps1 (wtedy cel i StripFieldsNotInTarget z configu - zalecane przy uruchomieniu z menu).
+# Zasada: w stringach tylko ASCII - cudzyslowy " i ', myslnik - (nie en-dash). Zapobiega bledom parsera.
 
 [CmdletBinding()]
 param(
@@ -40,6 +41,9 @@ if (-not [string]::IsNullOrWhiteSpace($ConfigPath) -and (Test-Path $ConfigPath -
             $TargetConnectionString = $cfg.TargetConnectionString
             $StripFieldsNotInTarget = $true
             $script:StripFieldsNotInTarget = $true
+        }
+        if ($cfg -and $cfg.SourceConnectionString) {
+            $script:SourceConnectionString = $cfg.SourceConnectionString
         }
         if ($cfg -and $null -ne $cfg.OptionSetValidationAction) {
             $script:OptionSetValidationAction = [string]$cfg.OptionSetValidationAction
@@ -146,6 +150,9 @@ if ($doOptionSetValidation -and $null -eq $script:connTarget -and -not [string]:
         $doOptionSetValidation = $false
     }
 }
+if ($doOptionSetValidation -and $script:connTarget) {
+    Write-Host "Walidacja option setow: wlaczona (akcja: $($script:OptionSetValidationAction))." -ForegroundColor Gray
+}
 
 $script:overrideCount = 0
 $script:ownerReplaceCount = 0
@@ -155,6 +162,9 @@ $script:DuplicateOverrideRemovedCount = 0
 $script:OptionSetIssues = [System.Collections.ArrayList]::new()
 $script:TargetOptionSetAllowed = @{}
 $script:OptionSetInteractiveChoice = @{}
+$script:SourceConnectionString = $null
+$script:connSource = $null
+$script:SourceOptionSetCache = @{}
 $script:EntitiesFoundInZip = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 function Get-TargetOptionSetAllowedForEntity {
@@ -165,7 +175,11 @@ function Get-TargetOptionSetAllowedForEntity {
     }
     $result = @{}
     try {
-        $meta = Get-CrmEntityMetadata -Conn $Conn -EntityLogicalName $EntityLogicalName -ErrorAction Stop
+        if ($script:entityFiltersAttributes) {
+            $meta = Get-CrmEntityMetadata -Conn $Conn -EntityLogicalName $EntityLogicalName -EntityFilters $script:entityFiltersAttributes -ErrorAction Stop
+        } else {
+            $meta = Get-CrmEntityMetadata -Conn $Conn -EntityLogicalName $EntityLogicalName -ErrorAction Stop
+        }
         if (-not $meta -or -not $meta.Attributes) { $script:TargetOptionSetAllowed[$EntityLogicalName] = $result; return $result }
         foreach ($attr in $meta.Attributes) {
             $ln = $attr.LogicalName
@@ -213,20 +227,81 @@ function Get-TargetOptionSetAllowedForEntity {
     return $result
 }
 
+function Get-SourceOptionSetOptions {
+    param([object]$Conn, [string]$EntityLogicalName, [string]$AttributeLogicalName)
+    if (-not $Conn -or [string]::IsNullOrWhiteSpace($EntityLogicalName) -or [string]::IsNullOrWhiteSpace($AttributeLogicalName)) { return $null }
+    $cacheKey = $EntityLogicalName + '|' + $AttributeLogicalName
+    if ($script:SourceOptionSetCache -and $script:SourceOptionSetCache.ContainsKey($cacheKey)) {
+        return $script:SourceOptionSetCache[$cacheKey]
+    }
+    $optionsList = [System.Collections.ArrayList]::new()
+    try {
+        $req = [Microsoft.Xrm.Sdk.Messages.RetrieveAttributeRequest]::new()
+        $req.EntityLogicalName = $EntityLogicalName
+        $req.LogicalName = $AttributeLogicalName
+        $req.RetrieveAsIfPublished = $true
+        $resp = $Conn.Execute($req)
+        $optionSet = $resp.AttributeMetadata.OptionSet
+        if (-not $optionSet -or -not $optionSet.Options) { $script:SourceOptionSetCache[$cacheKey] = $null; return $null }
+        foreach ($opt in $optionSet.Options) {
+            if ($null -eq $opt.Value) { continue }
+            $v = [int]$opt.Value
+            $label = ''
+            try {
+                if ($opt.Label -and $opt.Label.UserLocalizedLabel -and $opt.Label.UserLocalizedLabel.Label) {
+                    $label = [string]$opt.Label.UserLocalizedLabel.Label
+                }
+                if ([string]::IsNullOrWhiteSpace($label) -and $opt.Label -and $opt.Label.LocalizedLabels -and $opt.Label.LocalizedLabels.Count -gt 0) {
+                    $label = [string]$opt.Label.LocalizedLabels[0].Label
+                }
+            } catch { }
+            if ([string]::IsNullOrWhiteSpace($label)) { $label = "($v)" }
+            [void]$optionsList.Add([PSCustomObject]@{ Value = $v; Label = $label })
+        }
+    } catch {
+        Write-Host "  (zrodlo: brak opcji dla $EntityLogicalName.$AttributeLogicalName : $($_.Message))" -ForegroundColor DarkGray
+        $script:SourceOptionSetCache[$cacheKey] = $null
+        return $null
+    }
+    $result = @{ Options = $optionsList }
+    if (-not $script:SourceOptionSetCache) { $script:SourceOptionSetCache = @{} }
+    $script:SourceOptionSetCache[$cacheKey] = $result
+    return $result
+}
+
 function Get-OptionSetUserChoice {
-    param([string]$Key, [object]$AttrInfo, [object]$AllowedSet, [string]$EntName, [string]$Cname, [int]$ValInt)
+    param([string]$Key, [object]$AttrInfo, [object]$AllowedSet, [string]$EntName, [string]$Cname, [int]$ValInt, [object]$SourceOptions = $null)
     if ($script:OptionSetInteractiveChoice.ContainsKey($Key)) { return $script:OptionSetInteractiveChoice[$Key] }
-    $optionsList = ($AttrInfo.Options | Sort-Object -Property Value | ForEach-Object { "$($_.Value)=$($_.Label)" }) -join ', '
     Write-Host ""
-    Write-Host "  [Option set] Encja: $EntName, pole: $Cname – wartosc w zipie: $ValInt nie istnieje w celu." -ForegroundColor Yellow
-    Write-Host "  Dozwolone w celu (numer=nazwa): $optionsList" -ForegroundColor Cyan
-    $prompt = '  Wpisz numer do podstawienia (Enter=pomin, C=wyczysc pole): '
+    Write-Host "  [Option set] Encja: $EntName, pole: $Cname - wartosc w zipie: $ValInt nie istnieje w celu." -ForegroundColor Yellow
+    $sourceValues = $null
+    if ($SourceOptions -and $SourceOptions.Options -and $SourceOptions.Options.Count -gt 0) {
+        Write-Host "  Opcje w ZRODLE (numer=nazwa):" -ForegroundColor Cyan
+        $sorted = $SourceOptions.Options | Sort-Object -Property Value
+        foreach ($o in $sorted) { Write-Host "    $($o.Value)=$($o.Label)" -ForegroundColor Gray }
+        $sourceValues = [System.Collections.Generic.HashSet[int]]::new()
+        foreach ($o in $SourceOptions.Options) { [void]$sourceValues.Add([int]$o.Value) }
+        $prompt = '  Na jaka opcje ze zrodla zamienic? Wpisz numer (Enter=pomin, C=wyczysc pole): '
+    } else {
+        Write-Host "  Dozwolone w CELU (numer=nazwa):" -ForegroundColor Cyan
+        $sorted = $AttrInfo.Options | Sort-Object -Property Value
+        foreach ($o in $sorted) { Write-Host "    $($o.Value)=$($o.Label)" -ForegroundColor Gray }
+        Write-Host "  (Jesli w zrodle masz opcje Inne - w Config ustaw Zrodlo i Cel w Polaczenia.txt, zeby zobaczyc opcje ze zrodla.)" -ForegroundColor DarkGray
+        $prompt = '  Wpisz numer do podstawienia (Enter=pomin, C=wyczysc pole): '
+    }
     $userInput = (Read-Host $prompt).Trim()
     if ([string]::IsNullOrWhiteSpace($userInput)) { $script:OptionSetInteractiveChoice[$Key] = 'Skip'; return 'Skip' }
     if ($userInput -eq 'C' -or $userInput -eq 'c') { $script:OptionSetInteractiveChoice[$Key] = 'Clear'; return 'Clear' }
     $num = $null
-    if ([int]::TryParse($userInput, [ref]$num) -and $AllowedSet.Contains($num)) { $script:OptionSetInteractiveChoice[$Key] = $num; return $num }
-    Write-Host "  Nieprawidlowy numer – pomijam (zostaw bez zmiany)." -ForegroundColor DarkYellow
+    if ([int]::TryParse($userInput, [ref]$num)) {
+        if ($null -ne $sourceValues -and $sourceValues.Contains($num)) {
+            $script:OptionSetInteractiveChoice[$Key] = $num; return $num
+        }
+        if ($null -eq $sourceValues -and $AllowedSet -and $AllowedSet.Contains($num)) {
+            $script:OptionSetInteractiveChoice[$Key] = $num; return $num
+        }
+    }
+    Write-Host "  Nieprawidlowy numer - pomijam (zostaw bez zmiany)." -ForegroundColor DarkYellow
     $script:OptionSetInteractiveChoice[$Key] = 'Skip'
     return 'Skip'
 }
@@ -329,7 +404,7 @@ function Convert-CMTXmlContent {
             }
             foreach ($rec in $recordNodes) {
                 if ($duplicatesToRemove -contains $rec) { continue }
-                # Zduplikowane overriddencreatedon (bug eksportu) – zostaw tylko pierwsze
+                # Zduplikowane overriddencreatedon (bug eksportu) - zostaw tylko pierwsze
                 $overrideDupNodes = @($rec.SelectNodes('.//*[@name or @Name]') | Where-Object {
                     $fn = $_.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.GetAttribute('Name') }
                     $fn -eq 'overriddencreatedon'
@@ -337,7 +412,7 @@ function Convert-CMTXmlContent {
                 for ($i = 1; $i -lt $overrideDupNodes.Count; $i++) {
                     if ($overrideDupNodes[$i].ParentNode) { [void]$overrideDupNodes[$i].ParentNode.RemoveChild($overrideDupNodes[$i]); $changed = $true; $script:DuplicateOverrideRemovedCount++ }
                 }
-                # Lookupy do encji nieobecnych w pakiecie (msdyn_contactkpiid, msdyn_accountkpiid itd.) – usun z rekordu
+                # Lookupy do encji nieobecnych w pakiecie (msdyn_contactkpiid, msdyn_accountkpiid itd.) - usun z rekordu
                 if ($stripLookupSet -and $stripLookupSet.Count -gt 0) {
                     $toStrip = @($rec.SelectNodes('.//*[@name or @Name]') | Where-Object {
                         $fn = $_.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.GetAttribute('Name') }; if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.LocalName }
@@ -399,7 +474,7 @@ function Convert-CMTXmlContent {
                         if (Invoke-OptionSetValidationForField -Ent $ent -Rec $rec -Child $child -Cname $cname -ConnTarget $script:connTarget) { $changed = $true }
                     }
                 }
-                # Ustaw overriddencreatedon raz na rekord (nie w petli po polach – wtedy dodawaloby sie N razy)
+                # Ustaw overriddencreatedon raz na rekord (nie w petli po polach - wtedy dodawaloby sie N razy)
                 if (-not [string]::IsNullOrWhiteSpace($createdonVal)) {
                     if ($overrideNode) {
                         $overrideNode.InnerText = $createdonVal
@@ -560,11 +635,15 @@ try {
     $entitiesList = @($script:EntitiesFoundInZip | Sort-Object)
     if ($entitiesList.Count -gt 0) {
         Write-Host ('W zipie przetworzono encje: ' + ($entitiesList -join ', ') + '.') -ForegroundColor Gray
-        Write-Host 'Uwaga: W tym zipie sa tylko te encje. Jesli przy imporcie bedzie brakowac rekordow lub calych encji – dodaj do folderu Input zip z CMT zawierajacy brakujace encje i uruchom opcje 3 dla tego zipa.' -ForegroundColor Yellow
+        Write-Host 'Uwaga: W tym zipie sa tylko te encje. Jesli przy imporcie bedzie brakowac rekordow lub calych encji - dodaj do folderu Input zip z CMT zawierajacy brakujace encje i uruchom opcje 3 dla tego zipa.' -ForegroundColor Yellow
     }
 
     # Raport walidacji option setow (Report/Clear/Replace) + opcjonalnie interaktywna korekta i ponowna transformacja
     $didOptionSetCorrection = $false
+    if ($doOptionSetValidation -and $script:OptionSetIssues.Count -eq 0) {
+        Write-Host "Walidacja option setow: sprawdzono rekordy - nie znaleziono wartosci niepasujacych do celu." -ForegroundColor Gray
+        Write-Host "  Jesli przy imporcie CMT pojawi sie blad dot. option setu (np. wartosc nie dozwolona), sprawdz Config: OptionSetValidationAction=Report i polaczenie do celu (Polaczenia.txt)." -ForegroundColor DarkGray
+    }
     if ($doOptionSetValidation -and $script:OptionSetIssues -and $script:OptionSetIssues.Count -gt 0) {
         $reportDir = Split-Path $OutputZipPath -Parent
         if ([string]::IsNullOrWhiteSpace($reportDir)) { $reportDir = (Get-Location).Path }
@@ -579,7 +658,18 @@ try {
             Write-Host ('    Encja: ' + $issue.Entity + ' | Rekord: ' + $recInfo + ' | Pole: ' + $issue.Field + ' | Wartosc w zipie: ' + [string]$issue.ValueInZip + ' | Dozwolone w celu: ' + $issue.AllowedValues) -ForegroundColor Yellow
         }
         Write-Host ""
-        Write-Host '--- Przejdzmy przez bledy: wybierz co zrobic (ta sama decyzja dla wszystkich rekordow z ta sama encja, pole i wartosc w zipie). ---' -ForegroundColor Cyan
+        Write-Host '--- Przejdzmy przez bledy: wybierz na jaka opcje ZE ZRODLA zamienic (numer + nazwa). Ta sama decyzja dla wszystkich rekordow z ta sama encja, pole i wartosc. ---' -ForegroundColor Cyan
+        if (-not $script:connSource -and $script:SourceConnectionString) {
+            if (Get-Module -ListAvailable -Name 'Microsoft.Xrm.Data.PowerShell') {
+                Import-Module Microsoft.Xrm.Data.PowerShell -Force -ErrorAction SilentlyContinue
+                try {
+                    $script:connSource = Get-CrmConnection -ConnectionString $script:SourceConnectionString -ErrorAction Stop
+                    Write-Host '  Polaczenie ze zrodlem OK - beda pokazane opcje ze zrodla (numer=nazwa).' -ForegroundColor Gray
+                } catch {
+                    Write-Host ('  Brak polaczenia ze zrodlem - wybor tylko z opcji celu. ' + $_.Message) -ForegroundColor Yellow
+                }
+            }
+        }
         $seenKeys = @{}
         foreach ($issue in $script:OptionSetIssues) {
             $key = $issue.Entity + '|' + $issue.Field + '|' + [string]$issue.ValueInZip
@@ -590,10 +680,14 @@ try {
                 $attrInfo = $script:TargetOptionSetAllowed[$issue.Entity][$issue.Field]
             }
             if (-not $attrInfo) {
-                Write-Host ('  Pomijam (brak metadanych): encja=' + $issue.Entity + ', pole=' + $issue.Field) -ForegroundColor Gray
+                Write-Host ('  Pomijam (brak metadanych celu): encja=' + $issue.Entity + ', pole=' + $issue.Field) -ForegroundColor Gray
                 continue
             }
-            Get-OptionSetUserChoice -Key $key -AttrInfo $attrInfo -AllowedSet $attrInfo.AllowedSet -EntName $issue.Entity -Cname $issue.Field -ValInt $issue.ValueInZip
+            $sourceOpts = $null
+            if ($script:connSource) {
+                $sourceOpts = Get-SourceOptionSetOptions -Conn $script:connSource -EntityLogicalName $issue.Entity -AttributeLogicalName $issue.Field
+            }
+            Get-OptionSetUserChoice -Key $key -AttrInfo $attrInfo -AllowedSet $attrInfo.AllowedSet -EntName $issue.Entity -Cname $issue.Field -ValInt $issue.ValueInZip -SourceOptions $sourceOpts
         }
         Write-Host ""
         Write-Host 'Ponawiam transformacje z Twoimi wyborami...' -ForegroundColor Cyan
@@ -622,8 +716,8 @@ try {
     }
     if ($script:overrideCount -gt 0) { Write-Host ('Ustawiono overriddencreatedon w ' + $script:overrideCount + ' rekordach (oryginalna data utworzenia).') -ForegroundColor Gray }
     if ($script:DuplicateOverrideRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateOverrideRemovedCount + ' zduplikowanych pol overriddencreatedon w rekordach (bug eksportu).') -ForegroundColor Gray }
-    if ($script:LookupFieldsStrippedCount -gt 0) { Write-Host ('Usunieto ' + $script:LookupFieldsStrippedCount + ' pol lookup (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid) – brak w celu.') -ForegroundColor Gray }
-    if ($script:DuplicateRecordsRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateRecordsRemovedCount + ' zduplikowanych rekordow (ten sam klucz glowny) – zapobiega bledowi CMT: Element o tym samym kluczu.') -ForegroundColor Gray }
+    if ($script:LookupFieldsStrippedCount -gt 0) { Write-Host ('Usunieto ' + $script:LookupFieldsStrippedCount + ' pol lookup (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid) - brak w celu.') -ForegroundColor Gray }
+    if ($script:DuplicateRecordsRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateRecordsRemovedCount + ' zduplikowanych rekordow (ten sam klucz glowny) - zapobiega bledowi CMT: Element o tym samym kluczu.') -ForegroundColor Gray }
     if ($guidMap.Count -gt 0 -or $displayNameToGuid.Count -gt 0) {
         Write-Host 'Podmiana ownerow: ' -NoNewline -ForegroundColor Gray
         if ($guidMap.Count -gt 0) { Write-Host ('IdMap GUID ' + $guidMap.Count + '; ') -NoNewline -ForegroundColor Gray }

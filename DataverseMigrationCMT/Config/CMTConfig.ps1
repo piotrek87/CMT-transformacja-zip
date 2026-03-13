@@ -87,10 +87,11 @@ $LookupFieldsToStripFromImport = @(
 )
 
 # Walidacja option setow (branza, statusy itd.) przy transformacji zipa:
-# - Report     = tylko raport do pliku + komunikat (nic nie zmienia w zipie)
+# - Report     = wykryj niepasujace, zapisz CSV; po transformacji (opcja 3) pokaz bledy i pozwol wybrac
+#               opcje ZE ZRODLA (numer + nazwa) na ktora zamienic – wymaga Polaczenia.txt (Zrodlo + Cel)
 # - Clear     = usun wartosc pola (rekord zaimportuje sie z pusta branza)
 # - Replace   = ustaw na wartosc z OptionSetFallbackValues (np. industrycode=82 jako "Inne")
-# - Interactive = przy edycji zipa: przy kazdej niepasujacej wartosci pytaj – pokaz dozwolone (numer=nazwa), wybierz na co zamienic / wyczysc / pomin
+# - Interactive = przy kazdej niepasujacej wartosci pytaj (opcje ze zrodla lub z celu), wybierz zamienic / wyczysc / pomin
 # OptionSetFallbackValues: uzywane gdy Replace (nazwa_pola -> wartosc int w celu, np. industrycode = 82)
 $OptionSetValidationAction = 'Report'
 $OptionSetFallbackValues   = @{ industrycode = 82 }
