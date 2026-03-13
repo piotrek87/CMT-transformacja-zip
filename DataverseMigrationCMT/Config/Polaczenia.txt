@@ -1,0 +1,15 @@
+# Dane polaczenia do zrodla i celu (Dataverse / Dynamics 365).
+# Linie z # sa pomijane. NIE commituj tego pliku z haslami do repozytorium.
+#
+# Zrodlo (srodowisko z ktorego eksportujesz):
+ZrodloUrl=https://xvocrm.crm4.dynamics.com/
+ZrodloLogin=piotr.kowalczyk@xentivo.pl
+ZrodloHaslo=!Kuba2019!
+#
+# Cel (srodowisko do ktorego importujesz):
+CelUrl=https://xentivocrm.crm4.dynamics.com/
+CelLogin=piotr.kowalczyk@xentivo.pl
+CelHaslo=!Kuba2019!
+#
+# Jesli to samo konto do obu srodowisk, mozesz uzyc jednych pol Login i Haslo
+# i podac tylko ZrodloUrl i CelUrl powyzej.

@@ -1,0 +1,6 @@
+# Wymagania dla narzędzia migracyjnego Dataverse (PowerShell)
+#
+# Moduł PowerShell nie jest instalowany przez pip. Zainstaluj w PowerShell:
+#   Install-Module Microsoft.Xrm.Data.PowerShell -Scope CurrentUser
+#
+# Wersja modułu: 2.8.0 lub nowsza (zalecane).

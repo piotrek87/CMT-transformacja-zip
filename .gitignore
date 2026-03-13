@@ -1,0 +1,16 @@
+# Logi i transkrypty
+**/Logs/
+*.log
+**/CMT_Export_Transcript*.txt
+
+# Cache / tymczasowe
+**/LastGeneratedSchema.txt
+**/Output/data_schema_*.xml
+**/Output/contact.xml
+**/Output/*.zip
+
+# Zachowaj w Output: CMT_UserMap_*.xml, CMT_IdMap_*.json (generowane, ale małe i potrzebne do flow)
+
+# Dane wrażliwe (odkomentuj jeśli trzymasz hasła w plikach)
+# **/Config/Polaczenia.txt
+# **/Config/LoginHaslo.txt

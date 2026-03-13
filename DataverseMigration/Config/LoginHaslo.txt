@@ -1,0 +1,5 @@
+# Login i haslo - uzywane gdy w aplikacji zaznaczysz "Uzyj zapisanych" i wpiszesz URL srodowiska (zrodlo/cel).
+# Srodowisko wybierasz w aplikacji; tutaj tylko jedna para Login i Haslo (np. to samo konto do obu srodowisk).
+# Linie rozpoczynajace sie od # sa pomijane. NIE commituj tego pliku z haslem do repozytorium.
+Login=piotr.kowalczyk@xentivo.pl
+Haslo=!Kuba2019!

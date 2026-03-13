@@ -1,0 +1,460 @@
+<entities >
+  <entity name="account" displayname="Klient" etc="1" primaryidfield="accountid" primarynamefield="name" disableplugins="false">
+    <fields>
+      <field displayname="(Przestarzałe) Etap procesu" name="stageid" type="guid" />
+      <field displayname="(Przestarzałe) Pokonana ścieżka" name="traversedpath" type="string" />
+      <field displayname="{0} (Ostatnio zaktualizowany)" name="opendeals_date" type="datetime" />
+      <field displayname="{0} (Ostatnio zaktualizowany)" name="openrevenue_date" type="datetime" />
+      <field displayname="{0} (Podstawowa)" name="openrevenue_base" type="money" />
+      <field displayname="{0} (Stan)" name="opendeals_state" type="number" />
+      <field displayname="{0} (Stan)" name="openrevenue_state" type="number" />
+      <field displayname="Adres 1: długość geograficzna" name="address1_longitude" type="float" />
+      <field displayname="Adres 1: faks" name="address1_fax" type="string" />
+      <field displayname="Adres 1: identyfikator" name="address1_addressid" type="guid" primaryKey="true" />
+      <field displayname="Adres 1: kraj/region" name="address1_country" type="string" />
+      <field displayname="Adres 1: metoda wysyłki" name="address1_shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Adres 1: nazwa" name="address1_name" type="string" />
+      <field displayname="Adres 1: nazwa kontaktu podstawowego" name="address1_primarycontactname" type="string" />
+      <field displayname="Adres 1: powiat" name="address1_county" type="string" />
+      <field displayname="Adres 1: przesunięcie czasu UTC" name="address1_utcoffset" type="number" />
+      <field displayname="Adres 1: skrytka pocztowa" name="address1_postofficebox" type="string" />
+      <field displayname="Adres 1: strefa UPS" name="address1_upszone" type="string" />
+      <field displayname="Adres 1: szerokość geograficzna" name="address1_latitude" type="float" />
+      <field displayname="Adres 1: telefon 2" name="address1_telephone2" type="string" />
+      <field displayname="Adres 1: telefon 3" name="address1_telephone3" type="string" />
+      <field displayname="Adres 1: typ adresu" name="address1_addresstypecode" type="optionsetvalue" />
+      <field displayname="Adres 1: warunki frachtu" name="address1_freighttermscode" type="optionsetvalue" />
+      <field displayname="Adres 2: długość geograficzna" name="address2_longitude" type="float" />
+      <field displayname="Adres 2: faks" name="address2_fax" type="string" />
+      <field displayname="Adres 2: identyfikator" name="address2_addressid" type="guid" primaryKey="true" />
+      <field displayname="Adres 2: kod pocztowy" name="address2_postalcode" type="string" />
+      <field displayname="Adres 2: kraj/region" name="address2_country" type="string" />
+      <field displayname="Adres 2: metoda wysyłki" name="address2_shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Adres 2: miasto" name="address2_city" type="string" />
+      <field displayname="Adres 2: nazwa" name="address2_name" type="string" />
+      <field displayname="Adres 2: nazwa kontaktu podstawowego" name="address2_primarycontactname" type="string" />
+      <field displayname="Adres 2: powiat" name="address2_county" type="string" />
+      <field displayname="Adres 2: przesunięcie czasu UTC" name="address2_utcoffset" type="number" />
+      <field displayname="Adres 2: skrytka pocztowa" name="address2_postofficebox" type="string" />
+      <field displayname="Adres 2: strefa UPS" name="address2_upszone" type="string" />
+      <field displayname="Adres 2: szerokość geograficzna" name="address2_latitude" type="float" />
+      <field displayname="Adres 2: telefon 1" name="address2_telephone1" type="string" />
+      <field displayname="Adres 2: telefon 2" name="address2_telephone2" type="string" />
+      <field displayname="Adres 2: telefon 3" name="address2_telephone3" type="string" />
+      <field displayname="Adres 2: typ adresu" name="address2_addresstypecode" type="optionsetvalue" />
+      <field displayname="Adres 2: ulica 1" name="address2_line1" type="string" />
+      <field displayname="Adres 2: ulica 2" name="address2_line2" type="string" />
+      <field displayname="Adres 2: ulica 3" name="address2_line3" type="string" />
+      <field displayname="Adres 2: warunki frachtu" name="address2_freighttermscode" type="optionsetvalue" />
+      <field displayname="Adres 2: województwo" name="address2_stateorprovince" type="string" />
+      <field displayname="Adres e-mail" name="emailaddress1" type="string" />
+      <field displayname="Adres e-mail 2" name="emailaddress2" type="string" />
+      <field displayname="Adres e-mail 3" name="emailaddress3" type="string" />
+      <field displayname="Akcje w obiegu" name="sharesoutstanding" type="number" />
+      <field displayname="Autor (podmiot zewnętrzny)" name="createdbyexternalparty" type="entityreference" lookupType="externalparty" />
+      <field displayname="Autor modyfikacji (podmiot zewnętrzny)" name="modifiedbyexternalparty" type="entityreference" lookupType="externalparty" />
+      <field displayname="Branża" name="industrycode" type="optionsetvalue" />
+      <field displayname="Cennik" name="defaultpricelevelid" type="entityreference" lookupType="pricelevel" />
+      <field displayname="Created By (IP Address)" name="adx_createdbyipaddress" type="string" customfield="true" />
+      <field displayname="Created By (User Name)" name="adx_createdbyusername" type="string" customfield="true" />
+      <field displayname="Czas poświęcony przeze mnie" name="timespentbymeonemailandmeetings" type="string" />
+      <field displayname="Czas wstrzymania (minuty)" name="onholdtime" type="number" />
+      <field displayname="Data modyfikacji" name="modifiedon" type="datetime" />
+      <field displayname="Data utworzenia" name="createdon" type="datetime" />
+      <field displayname="Data utworzenia rekordu" name="overriddencreatedon" type="datetime" />
+      <field displayname="External ID" name="msdyn_externalaccountid" type="string" customfield="true" />
+      <field displayname="Faks" name="fax" type="string" />
+      <field displayname="Flaga NIP" name="xvo_isnip" type="bool" customfield="true" />
+      <field displayname="Giełda" name="stockexchange" type="string" />
+      <field displayname="Główny telefon" name="telephone1" type="string" />
+      <field displayname="Grupa hoteli" name="msevtmgt_hotelgroup" type="optionsetvalue" customfield="true" />
+      <field displayname="Identyfikator główny" name="masterid" type="entityreference" lookupType="account" />
+      <field displayname="Identyfikator obrazu encji" name="entityimageid" type="guid" />
+      <field displayname="Identyfikator segmentu" name="msdyn_segmentid" type="entityreference" lookupType="msdyn_segment" customfield="true" />
+      <field displayname="Identyfikator wyników analiz aplikacji Przyspieszanie sprzedaży" name="msdyn_salesaccelerationinsightid" type="entityreference" lookupType="msdyn_salesaccelerationinsight" customfield="true" />
+      <field displayname="Informacje" name="msdyncrm_insights_placeholder" type="string" customfield="true" />
+      <field displayname="Inny telefon" name="telephone2" type="string" />
+      <field displayname="Jednostka biznesowa — właściciel" name="owningbusinessunit" type="entityreference" lookupType="businessunit" />
+      <field displayname="Kapitalizacja rynkowa (podstawowa)" name="marketcap_base" type="money" />
+      <field displayname="Kategoria" name="accountcategorycode" type="optionsetvalue" />
+      <field displayname="Klasyfikacja" name="accountclassificationcode" type="optionsetvalue" />
+      <field displayname="Klasyfikacja konta" name="accountratingcode" type="optionsetvalue" />
+      <field displayname="Klient" name="accountid" type="guid" primaryKey="true" />
+      <field displayname="Klient nadrzędny" name="parentaccountid" type="entityreference" lookupType="account" />
+      <field displayname="Kod obszaru" name="territorycode" type="optionsetvalue" />
+      <field displayname="Kod PKD" name="sic" type="string" />
+      <field displayname="Kod pocztowy" name="address1_postalcode" type="string" />
+      <field displayname="Kod strefy czasowej do konwersji czasu UTC" name="utcconversiontimezonecode" type="number" />
+      <field displayname="Kontakt podstawowy" name="primarycontactid" type="entityreference" lookupType="contact" />
+      <field displayname="Konto rozliczeniowe" name="msdyn_billingaccount" type="entityreference" lookupType="account" customfield="true" />
+      <field displayname="KPI" name="msdyn_accountkpiid" type="entityreference" lookupType="msdyn_accountkpiitem" customfield="true" />
+      <field displayname="KRS" name="xvo_krs" type="string" customfield="true" />
+      <field displayname="Kurs walutowy" name="exchangerate" type="decimal" />
+      <field displayname="Liczba pracowników" name="numberofemployees" type="number" />
+      <field displayname="Limit kredytu" name="creditlimit" type="money" />
+      <field displayname="Limit kredytu (podstawowa)" name="creditlimit_base" type="money" />
+      <field displayname="Managing Partner" name="msa_managingpartnerid" type="entityreference" lookupType="account" customfield="true" />
+      <field displayname="Metoda wysyłki" name="shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Miasto" name="address1_city" type="string" />
+      <field displayname="Modified By (IP Address)" name="adx_modifiedbyipaddress" type="string" customfield="true" />
+      <field displayname="Modified By (User Name)" name="adx_modifiedbyusername" type="string" customfield="true" />
+      <field displayname="Nazwa klienta" name="name" type="string" />
+      <field displayname="Nazwa klienta (yomi)" name="yominame" type="string" />
+      <field displayname="Nie zezwalaj na rozmowy telefoniczne" name="donotphone" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie faksów" name="donotfax" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie poczty tradycyjnej" name="donotpostalmail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie wiadomości e-mail" name="donotemail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie zbiorczej poczty e-mail" name="donotbulkemail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie zbiorczej poczty tradycyjnej" name="donotbulkpostalmail" type="bool" />
+      <field displayname="NIP" name="xvo_nip" type="string" customfield="true" />
+      <field displayname="Numer budynku" name="address1_line2" type="string" />
+      <field displayname="Numer konta" name="accountnumber" type="string" />
+      <field displayname="Numer lokalu" name="address1_line3" type="string" />
+      <field displayname="Numer sekwencji importu" name="importsequencenumber" type="number" />
+      <field displayname="Numer wersji reguły strefy czasowej" name="timezoneruleversionnumber" type="number" />
+      <field displayname="Numer zwolnienia z podatku" name="msdyn_taxexemptnumber" type="string" customfield="true" />
+      <field displayname="Obraz domyślny" name="entityimage" type="imagedata" />
+      <field displayname="Obserwuj działania na wiadomościach e-mail" name="followemail" type="bool" />
+      <field displayname="Obszar" name="territoryid" type="entityreference" lookupType="territory" />
+      <field displayname="Opis" name="description" type="string" />
+      <field displayname="Ostatni czas wstrzymania" name="lastonholdtime" type="datetime" />
+      <field displayname="Ostatnia data objęta kampanią" name="lastusedincampaign" type="datetime" />
+      <field displayname="Ostatnia zastosowana umowa SLA" name="slainvokedid" type="entityreference" lookupType="sla" />
+      <field displayname="Otwarte przychody" name="openrevenue" type="money" />
+      <field displayname="Otwarte transakcje" name="opendeals" type="number" />
+      <field displayname="Podstawowa strefa czasowa" name="msdyn_primarytimezone" type="number" customfield="true" />
+      <field displayname="Podstawowy identyfikator Satori" name="primarysatoriid" type="string" />
+      <field displayname="Podstawowy identyfikator Twittera" name="primarytwitterid" type="string" />
+      <field displayname="Preferowana metoda kontaktu" name="preferredcontactmethodcode" type="optionsetvalue" />
+      <field displayname="Preferowana pora dnia" name="preferredappointmenttimecode" type="optionsetvalue" />
+      <field displayname="Preferowana usługa" name="preferredserviceid" type="entityreference" lookupType="service" />
+      <field displayname="Preferowane pomieszczenie/sprzęt" name="preferredequipmentid" type="entityreference" lookupType="equipment" />
+      <field displayname="Preferowany dzień" name="preferredappointmentdaycode" type="optionsetvalue" />
+      <field displayname="Preferowany użytkownik" name="preferredsystemuserid" type="entityreference" lookupType="systemuser" />
+      <field displayname="Preferred Resource (Deprecated)" name="msdyn_preferredresource" type="entityreference" lookupType="bookableresource" customfield="true" />
+      <field displayname="Proces" name="processid" type="guid" />
+      <field displayname="Profilowanie" name="xvo_donotprofile" type="bool" customfield="true" />
+      <field displayname="Przechowywanie danych" name="xvo_donotkeepdata" type="bool" customfield="true" />
+      <field displayname="Przedawnienie 30" name="aging30" type="money" />
+      <field displayname="Przedawnienie 30 (podstawowa)" name="aging30_base" type="money" />
+      <field displayname="Przedawnienie 60" name="aging60" type="money" />
+      <field displayname="Przedawnienie 60 (podstawowa)" name="aging60_base" type="money" />
+      <field displayname="Przedawnienie 90" name="aging90" type="money" />
+      <field displayname="Przedawnienie 90 (podstawowa)" name="aging90_base" type="money" />
+      <field displayname="Przychód roczny" name="revenue" type="money" />
+      <field displayname="Przychód roczny (podstawowa)" name="revenue_base" type="money" />
+      <field displayname="Przyczyna stanu" name="statuscode" type="status" />
+      <field displayname="REGON" name="xvo_regon" type="string" customfield="true" />
+      <field displayname="RODO — brak zgody" name="msdyn_gdproptout" type="bool" customfield="true" />
+      <field displayname="Rodzaj działalności" name="businesstypecode" type="optionsetvalue" />
+      <field displayname="Sales Tax Code" name="msdyn_salestaxcode" type="entityreference" lookupType="msdyn_taxcode" customfield="true" />
+      <field displayname="Scalony" name="merged" type="bool" />
+      <field displayname="Service Territory" name="msdyn_serviceterritory" type="entityreference" lookupType="territory" customfield="true" />
+      <field displayname="Stan" name="statecode" type="state" />
+      <field displayname="Symbol giełdowy" name="tickersymbol" type="string" />
+      <field displayname="Telefon 3" name="telephone3" type="string" />
+      <field displayname="Telefon dla adresu" name="address1_telephone1" type="string" />
+      <field displayname="Travel Charge" name="msdyn_travelcharge" type="money" customfield="true" />
+      <field displayname="Travel Charge (Base)" name="msdyn_travelcharge_base" type="money" customfield="true" />
+      <field displayname="Travel Charge Type" name="msdyn_travelchargetype" type="optionsetvalue" customfield="true" />
+      <field displayname="Tylko marketing" name="marketingonly" type="bool" />
+      <field displayname="Typ relacji" name="customertypecode" type="optionsetvalue" />
+      <field displayname="Uczestniczy w przepływie pracy" name="participatesinworkflow" type="bool" />
+      <field displayname="Ulica" name="address1_line1" type="string" />
+      <field displayname="Umowa SLA" name="slaid" type="entityreference" lookupType="sla" />
+      <field displayname="Utworzone przez" name="createdby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Utworzone przez (delegat)" name="createdonbehalfby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Użytkownik-właściciel" name="owninguser" type="entityreference" lookupType="systemuser" />
+      <field displayname="Waluta" name="transactioncurrencyid" type="entityreference" lookupType="transactioncurrency" />
+      <field displayname="Wartość rynkowa firmy" name="marketcap" type="money" />
+      <field displayname="Warunki płatności" name="paymenttermscode" type="optionsetvalue" />
+      <field displayname="Wielkość firmy klienta" name="customersizecode" type="optionsetvalue" />
+      <field displayname="Wiersz adresu 1" name="address1_composite" type="string" />
+      <field displayname="Wiersz adresu 2" name="address2_composite" type="string" />
+      <field displayname="Witryna FTP" name="ftpsiteurl" type="string" />
+      <field displayname="Witryna internetowa" name="websiteurl" type="string" />
+      <field displayname="Własność" name="ownershipcode" type="optionsetvalue" />
+      <field displayname="Właściciel" name="ownerid" type="owner" />
+      <field displayname="Województwo" name="address1_stateorprovince" type="string" />
+      <field displayname="Work Hour Template" name="msdyn_workhourtemplate" type="entityreference" lookupType="msdyn_workhourtemplate" customfield="true" />
+      <field displayname="Work Order Instructions" name="msdyn_workorderinstructions" type="string" customfield="true" />
+      <field displayname="Wstrzymanie kredytu" name="creditonhold" type="bool" />
+      <field displayname="Wypożyczalnia samochodów" name="msevtmgt_rentalcarprovider" type="optionsetvalue" customfield="true" />
+      <field displayname="Wyślij materiały marketingowe" name="donotsendmm" type="bool" />
+      <field displayname="Zespół będący właścicielem" name="owningteam" type="entityreference" lookupType="team" />
+      <field displayname="Zgoda na przetwarzanie danych osobowych" name="xvo_zgodanaprzetwarzaniedanychosobowych" type="bool" customfield="true" />
+      <field displayname="Zmodyfikowane przez (delegat)" name="modifiedonbehalfby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Zmodyfikowany przez" name="modifiedby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Zwolnienie z podatku" name="msdyn_taxexempt" type="bool" customfield="true" />
+      <field displayname="Źródłowy potencjalny klient" name="originatingleadid" type="entityreference" lookupType="lead" />
+    </fields>
+    <relationships>
+      <relationship name="accountleads" manyToMany="true" isreflexive="false" relatedEntityName="accountleads" m2mTargetEntity="lead" m2mTargetEntityPrimaryKey="accountid" />
+    </relationships>
+  </entity>
+  <entity name="contact" displayname="Kontakt" etc="2" primaryidfield="contactid" primarynamefield="fullname" disableplugins="false">
+    <fields>
+      <field displayname="(Przestarzałe) Etap procesu" name="stageid" type="guid" />
+      <field displayname="(Przestarzałe) Pokonana ścieżka" name="traversedpath" type="string" />
+      <field displayname="Administracja państwowa" name="governmentid" type="string" />
+      <field displayname="Adres" name="xvo_address" type="entityreference" lookupType="xvo_address" customfield="true" />
+      <field displayname="Adres 1: długość geograficzna" name="address1_longitude" type="float" />
+      <field displayname="Adres 1: faks" name="address1_fax" type="string" />
+      <field displayname="Adres 1: identyfikator" name="address1_addressid" type="guid" primaryKey="true" />
+      <field displayname="Adres 1: metoda wysyłki" name="address1_shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Adres 1: nazwa" name="address1_name" type="string" />
+      <field displayname="Adres 1: nazwa kontaktu podstawowego" name="address1_primarycontactname" type="string" />
+      <field displayname="Adres 1: powiat" name="address1_county" type="string" />
+      <field displayname="Adres 1: przesunięcie czasu UTC" name="address1_utcoffset" type="number" />
+      <field displayname="Adres 1: skrytka pocztowa" name="address1_postofficebox" type="string" />
+      <field displayname="Adres 1: strefa UPS" name="address1_upszone" type="string" />
+      <field displayname="Adres 1: szerokość geograficzna" name="address1_latitude" type="float" />
+      <field displayname="Adres 1: telefon" name="address1_telephone1" type="string" />
+      <field displayname="Adres 1: telefon 2" name="address1_telephone2" type="string" />
+      <field displayname="Adres 1: telefon 3" name="address1_telephone3" type="string" />
+      <field displayname="Adres 1: typ adresu" name="address1_addresstypecode" type="optionsetvalue" />
+      <field displayname="Adres 1: warunki frachtu" name="address1_freighttermscode" type="optionsetvalue" />
+      <field displayname="Adres 2: długość geograficzna" name="address2_longitude" type="float" />
+      <field displayname="Adres 2: faks" name="address2_fax" type="string" />
+      <field displayname="Adres 2: identyfikator" name="address2_addressid" type="guid" primaryKey="true" />
+      <field displayname="Adres 2: kod pocztowy" name="address2_postalcode" type="string" />
+      <field displayname="Adres 2: kraj/region" name="address2_country" type="string" />
+      <field displayname="Adres 2: metoda wysyłki" name="address2_shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Adres 2: miasto" name="address2_city" type="string" />
+      <field displayname="Adres 2: nazwa" name="address2_name" type="string" />
+      <field displayname="Adres 2: nazwa kontaktu podstawowego" name="address2_primarycontactname" type="string" />
+      <field displayname="Adres 2: powiat" name="address2_county" type="string" />
+      <field displayname="Adres 2: przesunięcie czasu UTC" name="address2_utcoffset" type="number" />
+      <field displayname="Adres 2: skrytka pocztowa" name="address2_postofficebox" type="string" />
+      <field displayname="Adres 2: strefa UPS" name="address2_upszone" type="string" />
+      <field displayname="Adres 2: szerokość geograficzna" name="address2_latitude" type="float" />
+      <field displayname="Adres 2: telefon 1" name="address2_telephone1" type="string" />
+      <field displayname="Adres 2: telefon 2" name="address2_telephone2" type="string" />
+      <field displayname="Adres 2: telefon 3" name="address2_telephone3" type="string" />
+      <field displayname="Adres 2: typ adresu" name="address2_addresstypecode" type="optionsetvalue" />
+      <field displayname="Adres 2: ulica 1" name="address2_line1" type="string" />
+      <field displayname="Adres 2: ulica 2" name="address2_line2" type="string" />
+      <field displayname="Adres 2: ulica 3" name="address2_line3" type="string" />
+      <field displayname="Adres 2: warunki frachtu" name="address2_freighttermscode" type="optionsetvalue" />
+      <field displayname="Adres 2: województwo" name="address2_stateorprovince" type="string" />
+      <field displayname="Adres 3" name="address3_composite" type="string" />
+      <field displayname="Adres 3: długość geograficzna" name="address3_longitude" type="float" />
+      <field displayname="Adres 3: faks" name="address3_fax" type="string" />
+      <field displayname="Adres 3: identyfikator" name="address3_addressid" type="guid" primaryKey="true" />
+      <field displayname="Adres 3: kod pocztowy" name="address3_postalcode" type="string" />
+      <field displayname="Adres 3: kraj/region" name="address3_country" type="string" />
+      <field displayname="Adres 3: metoda wysyłki" name="address3_shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Adres 3: miasto" name="address3_city" type="string" />
+      <field displayname="Adres 3: nazwa" name="address3_name" type="string" />
+      <field displayname="Adres 3: nazwa kontaktu podstawowego" name="address3_primarycontactname" type="string" />
+      <field displayname="Adres 3: powiat" name="address3_county" type="string" />
+      <field displayname="Adres 3: przesunięcie czasu UTC" name="address3_utcoffset" type="number" />
+      <field displayname="Adres 3: skrytka pocztowa" name="address3_postofficebox" type="string" />
+      <field displayname="Adres 3: strefa UPS" name="address3_upszone" type="string" />
+      <field displayname="Adres 3: szerokość geograficzna" name="address3_latitude" type="float" />
+      <field displayname="Adres 3: telefon 1" name="address3_telephone1" type="string" />
+      <field displayname="Adres 3: telefon 2" name="address3_telephone2" type="string" />
+      <field displayname="Adres 3: telefon 3" name="address3_telephone3" type="string" />
+      <field displayname="Adres 3: typ adresu" name="address3_addresstypecode" type="optionsetvalue" />
+      <field displayname="Adres 3: ulica 1" name="address3_line1" type="string" />
+      <field displayname="Adres 3: ulica 2" name="address3_line2" type="string" />
+      <field displayname="Adres 3: ulica 3" name="address3_line3" type="string" />
+      <field displayname="Adres 3: warunki frachtu" name="address3_freighttermscode" type="optionsetvalue" />
+      <field displayname="Adres 3: województwo" name="address3_stateorprovince" type="string" />
+      <field displayname="Adres e-mail" name="emailaddress1" type="string" />
+      <field displayname="Adres e-mail 2" name="emailaddress2" type="string" />
+      <field displayname="Adres e-mail 3" name="emailaddress3" type="string" />
+      <field displayname="Adres e-mail potwierdzony" name="adx_identity_emailaddress1confirmed" type="bool" customfield="true" />
+      <field displayname="Alert dotyczący profilu" name="adx_profilealert" type="bool" customfield="true" />
+      <field displayname="Asystent" name="assistantname" type="string" />
+      <field displayname="Autor (podmiot zewnętrzny)" name="createdbyexternalparty" type="entityreference" lookupType="externalparty" />
+      <field displayname="Autor modyfikacji (podmiot zewnętrzny)" name="modifiedbyexternalparty" type="entityreference" lookupType="externalparty" />
+      <field displayname="Blokada włączona" name="adx_identity_lockoutenabled" type="bool" customfield="true" />
+      <field displayname="Cennik" name="defaultpricelevelid" type="entityreference" lookupType="pricelevel" />
+      <field displayname="consent change source form Id" name="msgdpr_consentchangesourceformid" type="entityreference" lookupType="msdyncrm_marketingform" customfield="true" />
+      <field displayname="Czas poświęcony przeze mnie" name="timespentbymeonemailandmeetings" type="string" />
+      <field displayname="Czas wstrzymania (minuty)" name="onholdtime" type="number" />
+      <field displayname="Data alertu dotyczącego profilu" name="adx_profilealertdate" type="datetime" customfield="true" />
+      <field displayname="Data modyfikacji" name="modifiedon" type="datetime" />
+      <field displayname="Data modyfikacji profilu" name="adx_profilemodifiedon" type="datetime" customfield="true" />
+      <field displayname="Data umowy z postanowieniami dotyczącymi portalu" name="msdyn_portaltermsagreementdate" type="datetime" customfield="true" />
+      <field displayname="Data utworzenia" name="createdon" type="datetime" />
+      <field displayname="Data utworzenia rekordu" name="overriddencreatedon" type="datetime" />
+      <field displayname="Data zakończenia blokady" name="adx_identity_lockoutenddate" type="datetime" customfield="true" />
+      <field displayname="Dochód roczny" name="annualincome" type="money" />
+      <field displayname="Dochód roczny (podstawowa)" name="annualincome_base" type="money" />
+      <field displayname="Drugie imię" name="middlename" type="string" />
+      <field displayname="Drugie imię (yomi)" name="yomimiddlename" type="string" />
+      <field displayname="Dział" name="department" type="string" />
+      <field displayname="Edukacja" name="educationcode" type="optionsetvalue" />
+      <field displayname="Etykiety wpływu na decyzję" name="msdyn_decisioninfluencetag" type="optionsetvalue" customfield="true" />
+      <field displayname="Faks" name="fax" type="string" />
+      <field displayname="Formularz źródłowy" name="msdynmkt_marketingformid" type="entityreference" lookupType="msdynmkt_marketingform" customfield="true" />
+      <field displayname="Identyfikator główny" name="masterid" type="entityreference" lookupType="contact" />
+      <field displayname="Identyfikator obiektu usługi Microsoft Entra" name="msevtmgt_aadobjectid" type="string" customfield="true" />
+      <field displayname="Identyfikator obrazu encji" name="entityimageid" type="guid" />
+      <field displayname="Identyfikator segmentu" name="msdyn_segmentid" type="entityreference" lookupType="msdyn_segment" customfield="true" />
+      <field displayname="Imię" name="firstname" type="string" />
+      <field displayname="Imię (yomi)" name="yomifirstname" type="string" />
+      <field displayname="Imię i nazwisko (yomi)" name="yomifullname" type="string" />
+      <field displayname="Imię współmałżonka/partnera" name="spousesname" type="string" />
+      <field displayname="Imiona dzieci" name="childrensnames" type="string" />
+      <field displayname="Informacje" name="msdyncrm_insights_placeholder" type="string" customfield="true" />
+      <field displayname="Instrukcje do alertu dotyczącego profilu" name="adx_profilealertinstructions" type="string" customfield="true" />
+      <field displayname="Jednostka biznesowa — właściciel" name="owningbusinessunit" type="entityreference" lookupType="businessunit" />
+      <field displayname="Jest asystentem" name="msdyn_isassistantinorgchart" type="bool" customfield="true" />
+      <field displayname="Jest osobą niepełnoletnią" name="msdyn_isminor" type="bool" customfield="true" />
+      <field displayname="Jest osobą niepełnoletnią i ma zgodę rodzicielską" name="msdyn_isminorwithparentalconsent" type="bool" customfield="true" />
+      <field displayname="Klient" name="accountid" type="entityreference" lookupType="account" />
+      <field displayname="Klient zaplecza" name="isbackofficecustomer" type="bool" />
+      <field displayname="Kod pocztowy" name="address1_postalcode" type="string" />
+      <field displayname="Kod strefy czasowej do konwersji czasu UTC" name="utcconversiontimezonecode" type="number" />
+      <field displayname="Kontakt" name="contactid" type="guid" primaryKey="true" />
+      <field displayname="Kontakt" name="msevtmgt_contactid" type="entityreference" lookupType="msevtmgt_checkin" customfield="true" />
+      <field displayname="Kontakt dla funkcji SendNow" name="msdyncrm_contactid" type="entityreference" lookupType="msdyncrm_quicksendemail" customfield="true" />
+      <field displayname="Kontakt nadrzędny" name="parentcontactid" type="entityreference" lookupType="contact" />
+      <field displayname="KPI" name="msdyn_contactkpiid" type="entityreference" lookupType="msdyn_contactkpiitem" customfield="true" />
+      <field displayname="Kraj" name="address1_country" type="string" />
+      <field displayname="Kurs walutowy" name="exchangerate" type="decimal" />
+      <field displayname="Liczba dzieci" name="numberofchildren" type="number" />
+      <field displayname="Liczba nieudanych prób dostępu" name="adx_identity_accessfailedcount" type="number" customfield="true" />
+      <field displayname="Limit kredytu" name="creditlimit" type="money" />
+      <field displayname="Limit kredytu (podstawowa)" name="creditlimit_base" type="money" />
+      <field displayname="Logowanie lokalne wyłączone" name="adx_identity_locallogindisabled" type="bool" customfield="true" />
+      <field displayname="Logowanie włączone" name="adx_identity_logonenabled" type="bool" customfield="true" />
+      <field displayname="Ma dzieci" name="haschildrencode" type="optionsetvalue" />
+      <field displayname="Menedżer" name="managername" type="string" />
+      <field displayname="Metoda wysyłki" name="shippingmethodcode" type="optionsetvalue" />
+      <field displayname="Miasto" name="address1_city" type="string" />
+      <field displayname="Nazwa firmy" name="parentcustomerid" type="entityreference" lookupType="account|contact" />
+      <field displayname="Nazwa użytkownika" name="adx_identity_username" type="string" customfield="true" />
+      <field displayname="Nazwisko" name="lastname" type="string" />
+      <field displayname="Nazwisko (yomi)" name="yomilastname" type="string" />
+      <field displayname="Nie śledź" name="msgdpr_donottrack" type="bool" customfield="true" />
+      <field displayname="Nie zezwalaj na rozmowy telefoniczne" name="donotphone" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie faksów" name="donotfax" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie poczty tradycyjnej" name="donotpostalmail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie wiadomości e-mail" name="donotemail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie zbiorczej poczty e-mail" name="donotbulkemail" type="bool" />
+      <field displayname="Nie zezwalaj na wysyłanie zbiorczej poczty tradycyjnej" name="donotbulkpostalmail" type="bool" />
+      <field displayname="Numer budynku" name="address1_line2" type="string" />
+      <field displayname="Numer do oddzwaniania" name="callback" type="string" />
+      <field displayname="Numer lokalu" name="address1_line3" type="string" />
+      <field displayname="Numer sekwencji importu" name="importsequencenumber" type="number" />
+      <field displayname="Numer telefonu firmy" name="company" type="string" />
+      <field displayname="Numer wersji reguły strefy czasowej" name="timezoneruleversionnumber" type="number" />
+      <field displayname="Obraz encji" name="entityimage" type="imagedata" />
+      <field displayname="Obserwuj działania na wiadomościach e-mail" name="followemail" type="bool" />
+      <field displayname="Obszar" name="territorycode" type="optionsetvalue" />
+      <field displayname="Opis" name="description" type="string" />
+      <field displayname="Organization Name" name="adx_organizationname" type="string" customfield="true" />
+      <field displayname="Ostatni czas wstrzymania" name="lastonholdtime" type="datetime" />
+      <field displayname="Ostatnia data objęta kampanią" name="lastusedincampaign" type="datetime" />
+      <field displayname="Ostatnia zastosowana umowa SLA" name="slainvokedid" type="entityreference" lookupType="sla" />
+      <field displayname="Ostatnie działanie profilu" name="adx_profilelastactivity" type="datetime" customfield="true" />
+      <field displayname="Ostatnie pomyślne logowanie" name="adx_identity_lastsuccessfullogin" type="datetime" customfield="true" />
+      <field displayname="Pager" name="pager" type="string" />
+      <field displayname="parent_contactid" name="parent_contactid" type="entityreference" lookupType="contact" customfield="true" />
+      <field displayname="Partner zarządzający" name="msa_managingpartnerid" type="entityreference" lookupType="account" customfield="true" />
+      <field displayname="Pełna nazwa" name="fullname" type="string" />
+      <field displayname="Płeć" name="gendercode" type="optionsetvalue" />
+      <field displayname="Podmiot nadrzędny lub nadzorczy" name="msgdpr_gdprparentid" type="entityreference" lookupType="contact" customfield="true" />
+      <field displayname="Podstawowa strefa czasowa" name="msdyn_primarytimezone" type="number" customfield="true" />
+      <field displayname="Potwierdź usunięcie hasła" name="adx_confirmremovepassword" type="bool" customfield="true" />
+      <field displayname="Poza flagą firmy" name="msdyn_orgchangestatus" type="optionsetvalue" customfield="true" />
+      <field displayname="Pracownik" name="employeeid" type="string" />
+      <field displayname="Preferowana metoda kontaktu" name="preferredcontactmethodcode" type="optionsetvalue" />
+      <field displayname="Preferowana pora dnia" name="preferredappointmenttimecode" type="optionsetvalue" />
+      <field displayname="Preferowana usługa" name="preferredserviceid" type="entityreference" lookupType="service" />
+      <field displayname="Preferowane pomieszczenie/sprzęt" name="preferredequipmentid" type="entityreference" lookupType="equipment" />
+      <field displayname="Preferowany dzień" name="preferredappointmentdaycode" type="optionsetvalue" />
+      <field displayname="Preferowany identyfikator LCID (przestarzałe)" name="adx_preferredlcid" type="number" customfield="true" />
+      <field displayname="Preferowany język" name="mspp_userpreferredlcid" type="optionsetvalue" customfield="true" />
+      <field displayname="Preferowany użytkownik" name="preferredsystemuserid" type="entityreference" lookupType="systemuser" />
+      <field displayname="Proces" name="processid" type="guid" />
+      <field displayname="Profil jest anonimowy" name="adx_profileisanonymous" type="bool" customfield="true" />
+      <field displayname="Profilowanie" name="xvo_donotprofile" type="bool" customfield="true" />
+      <field displayname="Przechowywanie danych" name="xvo_donotkeepdata" type="bool" customfield="true" />
+      <field displayname="Przedawnienie 30" name="aging30" type="money" />
+      <field displayname="Przedawnienie 30 (podstawowa)" name="aging30_base" type="money" />
+      <field displayname="Przedawnienie 60" name="aging60" type="money" />
+      <field displayname="Przedawnienie 60 (podstawowa)" name="aging60_base" type="money" />
+      <field displayname="Przedawnienie 90" name="aging90" type="money" />
+      <field displayname="Przedawnienie 90 (podstawowa)" name="aging90_base" type="money" />
+      <field displayname="Przyczyna stanu" name="statuscode" type="status" />
+      <field displayname="Pseudonim" name="nickname" type="string" />
+      <field displayname="Rocznica" name="anniversary" type="datetime" />
+      <field displayname="RODO — brak zgody" name="msdyn_gdproptout" type="bool" customfield="true" />
+      <field displayname="RODO jest elementem podrzędnym" name="msgdpr_gdprischild" type="bool" customfield="true" />
+      <field displayname="Rola" name="accountrolecode" type="optionsetvalue" />
+      <field displayname="Scalony" name="merged" type="bool" />
+      <field displayname="SegmentMember" name="msdyncrm_segmentmemberid" type="entityreference" lookupType="msdyncrm_segment" customfield="true" />
+      <field displayname="Skrót hasła" name="adx_identity_passwordhash" type="string" customfield="true" />
+      <field displayname="Stan" name="statecode" type="state" />
+      <field displayname="Stan cywilny" name="familystatuscode" type="optionsetvalue" />
+      <field displayname="Stanowisko" name="jobtitle" type="string" />
+      <field displayname="Sufiks" name="suffix" type="string" />
+      <field displayname="sygnatura czasowa przesłania formularza (marketing wychodzący)" name="msdyncrm_marketingformsubmissiondateprecise" type="string" customfield="true" />
+      <field displayname="Sygnatura zabezpieczeń" name="adx_identity_securitystamp" type="string" customfield="true" />
+      <field displayname="Telefon 3" name="telephone3" type="string" />
+      <field displayname="Telefon asystenta" name="assistantphone" type="string" />
+      <field displayname="Telefon domowy" name="telephone2" type="string" />
+      <field displayname="Telefon domowy 2" name="home2" type="string" />
+      <field displayname="Telefon komórkowy" name="mobilephone" type="string" />
+      <field displayname="Telefon komórkowy potwierdzony" name="adx_identity_mobilephoneconfirmed" type="bool" customfield="true" />
+      <field displayname="Telefon menedżera" name="managerphone" type="string" />
+      <field displayname="Telefon służbowy" name="telephone1" type="string" />
+      <field displayname="Telefon służbowy 2" name="business2" type="string" />
+      <field displayname="Time Zone" name="adx_timezone" type="number" customfield="true" />
+      <field displayname="Treść profilu publicznego" name="adx_publicprofilecopy" type="string" customfield="true" />
+      <field displayname="Tylko marketing" name="marketingonly" type="bool" />
+      <field displayname="Typ relacji" name="customertypecode" type="optionsetvalue" />
+      <field displayname="Uczestniczy w przepływie pracy" name="participatesinworkflow" type="bool" />
+      <field displayname="Udzielona zgoda" name="msgdpr_gdprconsent" type="optionsetvalue" customfield="true" />
+      <field displayname="Ulica" name="address1_line1" type="string" />
+      <field displayname="Umowa SLA" name="slaid" type="entityreference" lookupType="sla" />
+      <field displayname="Urodziny" name="birthdate" type="datetime" />
+      <field displayname="Utworzone przez" name="createdby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Utworzone przez (delegat)" name="createdonbehalfby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Utworzony przez adres IP" name="adx_createdbyipaddress" type="string" customfield="true" />
+      <field displayname="Utworzony przez nazwa użytkownika" name="adx_createdbyusername" type="string" customfield="true" />
+      <field displayname="Uwierzytelnianie dwuskładnikowe włączone" name="adx_identity_twofactorenabled" type="bool" customfield="true" />
+      <field displayname="Użytkownik-właściciel" name="owninguser" type="entityreference" lookupType="systemuser" />
+      <field displayname="Waluta" name="transactioncurrencyid" type="entityreference" lookupType="transactioncurrency" />
+      <field displayname="Warunki płatności" name="paymenttermscode" type="optionsetvalue" />
+      <field displayname="Wielkość firmy klienta" name="customersizecode" type="optionsetvalue" />
+      <field displayname="Wiersz adresu 1" name="address1_composite" type="string" />
+      <field displayname="Wiersz adresu 2" name="address2_composite" type="string" />
+      <field displayname="Witryna FTP" name="ftpsiteurl" type="string" />
+      <field displayname="Witryna internetowa" name="websiteurl" type="string" />
+      <field displayname="Właściciel" name="ownerid" type="owner" />
+      <field displayname="Województwo" name="address1_stateorprovince" type="string" />
+      <field displayname="Wprowadzanie nowego hasła" name="adx_identity_newpassword" type="string" customfield="true" />
+      <field displayname="Wstrzymanie kredytu" name="creditonhold" type="bool" />
+      <field displayname="Wyłącz śledzenie sieci Web" name="msdyn_disablewebtracking" type="bool" customfield="true" />
+      <field displayname="Wyślij materiały marketingowe" name="donotsendmm" type="bool" />
+      <field displayname="Zapamiętaj mnie" name="msdyncrm_rememberme" type="bool" customfield="true" />
+      <field displayname="Zespół będący właścicielem" name="owningteam" type="entityreference" lookupType="team" />
+      <field displayname="Zewnętrzny identyfikator użytkownika" name="externaluseridentifier" type="string" />
+      <field displayname="Zmodyfikowane przez (delegat)" name="modifiedonbehalfby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Zmodyfikowany przez" name="modifiedby" type="entityreference" lookupType="systemuser" />
+      <field displayname="Zmodyfikowany przez adres IP" name="adx_modifiedbyipaddress" type="string" customfield="true" />
+      <field displayname="Zmodyfikowany przez nazwa użytkownika" name="adx_modifiedbyusername" type="string" customfield="true" />
+      <field displayname="Zwrot grzecznościowy" name="salutation" type="string" />
+      <field displayname="Źródło potencjalnych klientów" name="leadsourcecode" type="optionsetvalue" />
+      <field displayname="Źródłowa strona docelowa (marketing wychodzący)" name="msdyncrm_marketingpageid" type="entityreference" lookupType="msdyncrm_marketingpage" customfield="true" />
+      <field displayname="Źródłowa wiadomość e-mail" name="msdynmkt_emailid" type="entityreference" lookupType="msdynmkt_email" customfield="true" />
+      <field displayname="Źródłowa wiadomość e-mail (marketing wychodzący)" name="msdyncrm_emailid" type="entityreference" lookupType="msdyncrm_marketingemail" customfield="true" />
+      <field displayname="Źródłowe pozyskiwanie klientów (marketing wychodzący)" name="msdyncrm_customerjourneyid" type="entityreference" lookupType="msdyncrm_customerjourney" customfield="true" />
+      <field displayname="Źródłowe wydarzenie" name="msevtmgt_originatingeventid" type="entityreference" lookupType="msevtmgt_event" customfield="true" />
+      <field displayname="Źródłowy formularz (marketing wychodzący)" name="msdyncrm_marketingformid" type="entityreference" lookupType="msdyncrm_marketingform" customfield="true" />
+      <field displayname="Źródłowy potencjalny klient" name="originatingleadid" type="entityreference" lookupType="lead" />
+      <field displayname="Źródłowy proces pozyskiwania klientów" name="msdynmkt_customerjourneyid" type="entityreference" lookupType="msdynmkt_journey" customfield="true" />
+    </fields>
+    <relationships>
+      <relationship name="contactleads" manyToMany="true" isreflexive="false" relatedEntityName="contactleads" m2mTargetEntity="lead" m2mTargetEntityPrimaryKey="leadid" />
+      <relationship name="entitlementcontacts" manyToMany="true" isreflexive="false" relatedEntityName="entitlementcontacts" m2mTargetEntity="entitlement" m2mTargetEntityPrimaryKey="entitlementid" />
+      <relationship name="servicecontractcontacts" manyToMany="true" isreflexive="false" relatedEntityName="servicecontractcontacts" m2mTargetEntity="contract" m2mTargetEntityPrimaryKey="contractid" />
+    </relationships>
+  </entity>
+</entities>
