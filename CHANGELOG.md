@@ -2,6 +2,13 @@
 
 Zmiany w projekcie narzędzia migracyjnego Dataverse.
 
+## 2026-03-14
+
+- **Stan „działa z contactami” – zapis w repo**: Commit z tagiem `v1.1-contacts-ok` do powrotu po ewentualnych przyszłych problemach. (piotrek87)
+- **Transform CMT: overriddencreatedon raz na rekord**: Ustawianie/dodawanie pola overriddencreatedon przeniesione po pętlę po polach rekordu – wcześniej wykonywało się dla każdego dziecka, co dodawało dziesiątki kopii pola w jednym rekordzie (bug pętli). (piotrek87)
+- **Menu CMT: naprawa parsera PowerShell**: Zamiana „mądrych” cudzysłowów (Unicode) na zwykłe oraz wybrane stringi na pojedyncze cudzysłowy – eliminuje błąd „The string is missing the terminator” przy uruchomieniu Start-CMTMigrationMenu.ps1. (piotrek87)
+- **Lookupy i duplikaty**: LookupFieldsToStripFromImport (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid), usuwanie zduplikowanych overriddencreatedon i rekordów po PK – bez zmian; potwierdzone działanie z contactami. (piotrek87)
+
 ## 2026-03-13
 
 - **Inicjalizacja repozytorium Git**: Projekt w wersji działającej – transformacja CMT z deduplikacją rekordów (naprawa błędu „Element o tym samym kluczu został już dodany” przy imporcie account/contact). Tag `v1.0-cmt-dziala` do powrotu do tego stanu. (piotrek87)

@@ -60,6 +60,11 @@ function Show-Menu {
         Write-Host "  Aktualny zip: " -NoNewline
         Write-Host $zipName -ForegroundColor Cyan
         Write-Host "    $($script:LastZipPath)" -ForegroundColor DarkGray
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($script:LastZipPath)
+        $forTargetPath = Join-Path $outputDir ($baseName + '_ForTarget.zip')
+        Write-Host "  Do importu w CMT: " -NoNewline -ForegroundColor Gray
+        Write-Host ($baseName + '_ForTarget.zip') -ForegroundColor Yellow
+        Write-Host "    (pelna sciezka: $forTargetPath)" -ForegroundColor DarkGray
     } else {
         Write-Host "  Aktualny zip: (nie wybrano)" -ForegroundColor DarkGray
     }
@@ -206,7 +211,12 @@ do {
                 if ($p.ExitCode -eq 0) {
                     Write-Host "Gotowy zip: $outZip" -ForegroundColor Green
                     Write-Host "W zipie: ownerzy podmienieni (IdMap), overriddencreatedon = oryginalna data." -ForegroundColor Cyan
-                    Write-Host "Ten zip mozesz zaimportowac sam (CMT Import data lub inne narzedzie)." -ForegroundColor Gray
+                    Write-Host ""
+                    Write-Host "W CMT (Import data) w polu Plik ZIP wybierz DOKLADNIE ten plik:" -ForegroundColor Yellow
+                    Write-Host "  $outZip" -ForegroundColor White
+                    Write-Host 'NIE wybieraj pliku z folderu Input (contact.zip / contact_account.zip) - to powoduje Stage Failed.' -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "Ten zip mozesz zaimportowac w CRM Configuration Migration (Import data)." -ForegroundColor Gray
                 } else { Write-Host "Kod wyjscia: $($p.ExitCode)" -ForegroundColor Yellow }
             } catch {
                 Add-MenuLog ('BLAD opcja 3: ' + $_)
@@ -218,21 +228,21 @@ do {
             Add-MenuLog -NoConsole "Opcja 4: Log bledow CMT"
             $logScript = Join-Path $scriptRoot 'Lib\Get-CMTImportErrorLog.ps1'
             if (-not (Test-Path $logScript)) {
-                Write-Host "Brak Lib\Get-CMTImportErrorLog.ps1" -ForegroundColor Red
+                Write-Host 'Brak Lib\Get-CMTImportErrorLog.ps1' -ForegroundColor Red
                 pause
                 break
             }
             try {
                 & $logScript -Tail 120
                 Write-Host ""
-                Write-Host "Jesli log jest pusty: sprawdz katalog, w ktorym uruchomiles CRM Configuration Migration (np. plik DataMigrationUtility.log)." -ForegroundColor Gray
+                Write-Host 'Jesli log jest pusty: sprawdz katalog, w ktorym uruchomiles CRM Configuration Migration (np. plik DataMigrationUtility.log).' -ForegroundColor Gray
             } catch {
                 Write-Host ('BLAD: ' + $_) -ForegroundColor Red
             }
             pause
         }
-        '0' { Add-MenuLog -NoConsole "Wyjscie"; exit 0 }
-        default { Write-Host "Wybierz 0, 1, 2, 3 lub 4." -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
+        '0' { Add-MenuLog -NoConsole 'Wyjscie'; exit 0 }
+        default { Write-Host 'Wybierz 0, 1, 2, 3 lub 4.' -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
     }
 } while ($true)
 Add-MenuLog -NoConsole 'Koniec sesji'

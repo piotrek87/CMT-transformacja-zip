@@ -47,7 +47,13 @@ if (-not [string]::IsNullOrWhiteSpace($ConfigPath) -and (Test-Path $ConfigPath -
         if ($cfg -and $cfg.OptionSetFallbackValues -and $cfg.OptionSetFallbackValues -is [hashtable]) {
             $script:OptionSetFallbackValues = $cfg.OptionSetFallbackValues
         }
+        if ($cfg -and $cfg.LookupFieldsToStripFromImport -and $cfg.LookupFieldsToStripFromImport -is [array]) {
+            $script:LookupFieldsToStripFromImport = @($cfg.LookupFieldsToStripFromImport)
+        }
     } catch { Write-Host "Nie udalo sie zaladowac configu: $($_.Message)" -ForegroundColor Yellow }
+}
+if (-not $script:LookupFieldsToStripFromImport -or $script:LookupFieldsToStripFromImport.Count -eq 0) {
+    $script:LookupFieldsToStripFromImport = @('msdyn_accountkpiid', 'msdyn_contactkpiid', 'transactioncurrencyid', 'originatingleadid')
 }
 $script:StripFieldsNotInTarget = $StripFieldsNotInTarget
 
@@ -144,6 +150,8 @@ if ($doOptionSetValidation -and $null -eq $script:connTarget -and -not [string]:
 $script:overrideCount = 0
 $script:ownerReplaceCount = 0
 $script:DuplicateRecordsRemovedCount = 0
+$script:LookupFieldsStrippedCount = 0
+$script:DuplicateOverrideRemovedCount = 0
 $script:OptionSetIssues = [System.Collections.ArrayList]::new()
 $script:TargetOptionSetAllowed = @{}
 $script:OptionSetInteractiveChoice = @{}
@@ -275,6 +283,11 @@ function Convert-CMTXmlContent {
                 if (($ln -eq 'entity' -or $ln -eq 'Entity') -and ($child.GetAttribute('name') -or $child.GetAttribute('Name'))) { $entityNodes += $child }
             }
         }
+        $stripLookupSet = $null
+        if ($script:LookupFieldsToStripFromImport -and $script:LookupFieldsToStripFromImport.Count -gt 0) {
+            $stripLookupSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($fn in $script:LookupFieldsToStripFromImport) { [void]$stripLookupSet.Add([string]$fn) }
+        }
         foreach ($ent in $entityNodes) {
             $en = $ent.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($en)) { $en = $ent.GetAttribute('Name') }
             if (-not [string]::IsNullOrWhiteSpace($en)) { [void]$script:EntitiesFoundInZip.Add($en) }
@@ -316,6 +329,22 @@ function Convert-CMTXmlContent {
             }
             foreach ($rec in $recordNodes) {
                 if ($duplicatesToRemove -contains $rec) { continue }
+                # Zduplikowane overriddencreatedon (bug eksportu) – zostaw tylko pierwsze
+                $overrideDupNodes = @($rec.SelectNodes('.//*[@name or @Name]') | Where-Object {
+                    $fn = $_.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.GetAttribute('Name') }
+                    $fn -eq 'overriddencreatedon'
+                })
+                for ($i = 1; $i -lt $overrideDupNodes.Count; $i++) {
+                    if ($overrideDupNodes[$i].ParentNode) { [void]$overrideDupNodes[$i].ParentNode.RemoveChild($overrideDupNodes[$i]); $changed = $true; $script:DuplicateOverrideRemovedCount++ }
+                }
+                # Lookupy do encji nieobecnych w pakiecie (msdyn_contactkpiid, msdyn_accountkpiid itd.) – usun z rekordu
+                if ($stripLookupSet -and $stripLookupSet.Count -gt 0) {
+                    $toStrip = @($rec.SelectNodes('.//*[@name or @Name]') | Where-Object {
+                        $fn = $_.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.GetAttribute('Name') }; if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.LocalName }
+                        -not [string]::IsNullOrWhiteSpace($fn) -and $stripLookupSet.Contains($fn)
+                    })
+                    foreach ($n in $toStrip) { if ($n.ParentNode) { [void]$n.ParentNode.RemoveChild($n); $changed = $true; $script:LookupFieldsStrippedCount++ } }
+                }
                 $createdonVal = $null
                 $overrideNode = $null
                 $fieldLikeParent = $null
@@ -369,32 +398,33 @@ function Convert-CMTXmlContent {
                     if ($script:doOptionSetValidation -and $script:connTarget -and -not [string]::IsNullOrWhiteSpace($cname)) {
                         if (Invoke-OptionSetValidationForField -Ent $ent -Rec $rec -Child $child -Cname $cname -ConnTarget $script:connTarget) { $changed = $true }
                     }
-                    if (-not [string]::IsNullOrWhiteSpace($createdonVal)) {
-                        if ($overrideNode) {
-                            $overrideNode.InnerText = $createdonVal
-                            if ($useValueAttr) { $overrideNode.SetAttribute('value', $createdonVal) }
-                        } else {
-                            if ($fieldLikeParent -and $fieldLikeParent.LocalName -match '^(field|Field)$') {
-                                $ns = $fieldLikeParent.NamespaceURI
-                                if (-not [string]::IsNullOrWhiteSpace($ns)) {
-                                    $newEl = $doc.CreateElement($fieldLikeParent.LocalName, $ns)
-                                } else {
-                                    $newEl = $doc.CreateElement($fieldLikeParent.LocalName)
-                                }
-                                $newEl.SetAttribute('name', 'overriddencreatedon')
-                                $newEl.InnerText = $createdonVal
-                                if ($useValueAttr) { $newEl.SetAttribute('value', $createdonVal) }
-                                $parent = if ($fieldLikeParent.ParentNode -and $fieldLikeParent.ParentNode -ne $rec) { $fieldLikeParent.ParentNode } else { $rec }
-                                [void]$parent.AppendChild($newEl)
+                }
+                # Ustaw overriddencreatedon raz na rekord (nie w petli po polach – wtedy dodawaloby sie N razy)
+                if (-not [string]::IsNullOrWhiteSpace($createdonVal)) {
+                    if ($overrideNode) {
+                        $overrideNode.InnerText = $createdonVal
+                        if ($useValueAttr) { $overrideNode.SetAttribute('value', $createdonVal) }
+                    } else {
+                        if ($fieldLikeParent -and $fieldLikeParent.LocalName -match '^(field|Field)$') {
+                            $ns = $fieldLikeParent.NamespaceURI
+                            if (-not [string]::IsNullOrWhiteSpace($ns)) {
+                                $newEl = $doc.CreateElement($fieldLikeParent.LocalName, $ns)
                             } else {
-                                $newEl = $doc.CreateElement('overriddencreatedon')
-                                $newEl.InnerText = $createdonVal
-                                [void]$rec.AppendChild($newEl)
+                                $newEl = $doc.CreateElement($fieldLikeParent.LocalName)
                             }
+                            $newEl.SetAttribute('name', 'overriddencreatedon')
+                            $newEl.InnerText = $createdonVal
+                            if ($useValueAttr) { $newEl.SetAttribute('value', $createdonVal) }
+                            $parent = if ($fieldLikeParent.ParentNode -and $fieldLikeParent.ParentNode -ne $rec) { $fieldLikeParent.ParentNode } else { $rec }
+                            [void]$parent.AppendChild($newEl)
+                        } else {
+                            $newEl = $doc.CreateElement('overriddencreatedon')
+                            $newEl.InnerText = $createdonVal
+                            [void]$rec.AppendChild($newEl)
                         }
-                        $changed = $true
-                        $script:overrideCount++
                     }
+                    $changed = $true
+                    $script:overrideCount++
                 }
             }
         }
@@ -591,6 +621,8 @@ try {
         Write-Host ('Zapisano: ' + $OutputZipPath)
     }
     if ($script:overrideCount -gt 0) { Write-Host ('Ustawiono overriddencreatedon w ' + $script:overrideCount + ' rekordach (oryginalna data utworzenia).') -ForegroundColor Gray }
+    if ($script:DuplicateOverrideRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateOverrideRemovedCount + ' zduplikowanych pol overriddencreatedon w rekordach (bug eksportu).') -ForegroundColor Gray }
+    if ($script:LookupFieldsStrippedCount -gt 0) { Write-Host ('Usunieto ' + $script:LookupFieldsStrippedCount + ' pol lookup (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid) – brak w celu.') -ForegroundColor Gray }
     if ($script:DuplicateRecordsRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateRecordsRemovedCount + ' zduplikowanych rekordow (ten sam klucz glowny) – zapobiega bledowi CMT: Element o tym samym kluczu.') -ForegroundColor Gray }
     if ($guidMap.Count -gt 0 -or $displayNameToGuid.Count -gt 0) {
         Write-Host 'Podmiana ownerow: ' -NoNewline -ForegroundColor Gray

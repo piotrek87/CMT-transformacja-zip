@@ -77,6 +77,15 @@ $SchemaEntityOrder = @(
     'campaign', 'campaignactivity', 'campaignresponse', 'list', 'listmember'
 )
 
+# Pola lookup do usuniecia z zipa przed importem (encje w zrodle maja GUID, w celu brak – CMT failuje Stage).
+# Usuniecie z XML = import nie probuje lookup; w celu pole bedzie puste.
+$LookupFieldsToStripFromImport = @(
+    'msdyn_accountkpiid'
+    'msdyn_contactkpiid'
+    'transactioncurrencyid'
+    'originatingleadid'
+)
+
 # Walidacja option setow (branza, statusy itd.) przy transformacji zipa:
 # - Report     = tylko raport do pliku + komunikat (nic nie zmienia w zipie)
 # - Clear     = usun wartosc pola (rekord zaimportuje sie z pusta branza)
@@ -99,6 +108,7 @@ $OptionSetFallbackValues   = @{ industrycode = 82 }
     SchemaEntityIncludeOnly   = $SchemaEntityIncludeOnly
     SchemaEntityOrder         = $SchemaEntityOrder
     SystemEntitiesToSkip      = $SystemEntitiesToSkip
-    OptionSetValidationAction   = $OptionSetValidationAction
-    OptionSetFallbackValues     = $OptionSetFallbackValues
+    OptionSetValidationAction     = $OptionSetValidationAction
+    OptionSetFallbackValues       = $OptionSetFallbackValues
+    LookupFieldsToStripFromImport = $LookupFieldsToStripFromImport
 }
