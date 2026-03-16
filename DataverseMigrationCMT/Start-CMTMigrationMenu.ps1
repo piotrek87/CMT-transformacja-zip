@@ -2,6 +2,7 @@
 # Uruchom: MigracjaCMT.bat lub MigracjaCMT.exe (Build-Exe.ps1)
 # Zasada: w stringach tylko ASCII - cudzyslowy " i ', myslnik - (nie en-dash). Zapobiega bledom parsera.
 
+$script:CMTMenuVersion = 'v1.4-metadata-cache'
 $ErrorActionPreference = 'Stop'
 try {
 if ($MyInvocation.MyCommand.Path) {
@@ -40,8 +41,39 @@ if (-not (Test-Path $inputDir)) { New-Item -ItemType Directory -Path $inputDir -
 $script:LastZipPath = $null
 $script:IdMapPath = Join-Path $outputDir 'CMT_IdMap_SystemUser.json'
 
+function Get-EntitiesFromZip {
+    param([string]$ZipPath)
+    if (-not $ZipPath -or -not (Test-Path $ZipPath -PathType Leaf)) { return @() }
+    $entitySet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+        try {
+            foreach ($entry in $zip.Entries) {
+                if (-not $entry.Name -or -not $entry.Name.EndsWith('.xml', [StringComparison]::OrdinalIgnoreCase)) { continue }
+                if ($entry.Length -gt 50 * 1024 * 1024) { continue }
+                $reader = $null
+                try {
+                    $stream = $entry.Open()
+                    $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8)
+                    $content = $reader.ReadToEnd()
+                } finally { if ($reader) { $reader.Dispose() }; if ($stream) { $stream.Dispose() } }
+                $matches = [regex]::Matches($content, '(?i)<(?:entity|Entity)\s[^>]*\b(?:name|Name)=["'']([^"'']+)["'']')
+                foreach ($m in $matches) {
+                    if ($m.Groups[1].Success -and $m.Groups[1].Value) {
+                        [void]$entitySet.Add($m.Groups[1].Value.Trim())
+                    }
+                }
+            }
+        } finally { $zip.Dispose() }
+    } catch { return @() }
+    $arr = @($entitySet | Sort-Object)
+    return $arr
+}
+
 function Show-Menu {
     Clear-Host
+    Write-Host "  Wersja: $script:CMTMenuVersion  (git: git checkout $script:CMTMenuVersion)" -ForegroundColor DarkCyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "  CMT - transformacja zip (ownerzy, daty, pola)" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
@@ -53,6 +85,8 @@ function Show-Menu {
     Write-Host "  2. Generuj User Map (imie i nazwisko zrodlo->cel) -> User Map XML i IdMap JSON" -ForegroundColor White
     Write-Host "  3. Transformuj zip: ownerzy, daty utworzenia, usun pola nie z celu -> *_ForTarget.zip" -ForegroundColor White
     Write-Host "  4. Pokaz ostatni log bledow CMT (gdy import konczy sie Stage Failed)" -ForegroundColor White
+    Write-Host "  5. Pobierz metadane celu (cache dla opcji 3, encje z wybranego zipa)" -ForegroundColor White
+    Write-Host "  6. Popraw daty Uwag ze zrodla (uruchom PO opcji 3 na zipie *_ForTarget; wynik od razu do importu)" -ForegroundColor White
     Write-Host "  0. Wyjscie" -ForegroundColor Gray
     Write-Host ""
     # Status: wybrany zip i data User Map
@@ -83,12 +117,71 @@ function Show-Menu {
     } else {
         Write-Host "  User Map: brak (uruchom opcje 2)" -ForegroundColor DarkGray
     }
+    $cacheFiles = @(Get-ChildItem -Path $outputDir -Filter 'TargetMetadata_*.json' -File -ErrorAction SilentlyContinue)
+    if ($cacheFiles.Count -gt 0) {
+        $newestCache = $cacheFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $cacheDateStr = ''
+        try {
+            $cacheJson = [System.IO.File]::ReadAllText($newestCache.FullName, [System.Text.Encoding]::UTF8)
+            $cacheObj = $cacheJson | ConvertFrom-Json
+            if ($cacheObj.FetchedAt) {
+                $dt = [DateTime]::Parse($cacheObj.FetchedAt)
+                $cacheDateStr = $dt.ToString('dd.MM.yyyy HH:mm')
+            }
+        } catch { }
+        if (-not $cacheDateStr) { $cacheDateStr = $newestCache.LastWriteTime.ToString('dd.MM.yyyy HH:mm') }
+        $cacheName = $newestCache.Name
+        if ($cacheFiles.Count -gt 1) { $cacheName = $cacheName + " (+$($cacheFiles.Count - 1) inny)" }
+        Write-Host "  Cache metadanych: " -NoNewline
+        Write-Host $cacheName -NoNewline -ForegroundColor Cyan
+        Write-Host " | ostatni pobor: " -NoNewline
+        Write-Host $cacheDateStr -ForegroundColor Cyan
+        if ($script:LastZipPath -and $cacheObj.EntityAttributes) {
+            $selectedZipName = [System.IO.Path]::GetFileName($script:LastZipPath)
+            $selectedZipPath = [System.IO.Path]::GetFullPath($script:LastZipPath)
+            $scanFile = Join-Path $outputDir 'CMT_SelectedZipEntities.json'
+            $zipEnts = $null
+            if (Test-Path $scanFile -PathType Leaf) {
+                try {
+                    $scanJson = [System.IO.File]::ReadAllText($scanFile, [System.Text.Encoding]::UTF8)
+                    $scanData = $scanJson | ConvertFrom-Json
+                    $scanPath = if ($scanData.ZipPath) { [System.IO.Path]::GetFullPath([string]$scanData.ZipPath) } else { $null }
+                    $scanName = if ($scanData.ZipName) { [string]$scanData.ZipName } else { $null }
+                    if (($scanName -eq $selectedZipName) -or ($scanPath -eq $selectedZipPath)) {
+                        $zipEnts = @($scanData.Entities | ForEach-Object { [string]$_ })
+                    }
+                } catch { }
+            }
+            if ($null -eq $zipEnts) {
+                $zipEnts = @(Get-EntitiesFromZip -ZipPath $script:LastZipPath)
+                try {
+                    $scanPayload = @{ ZipPath = $script:LastZipPath; ZipName = $selectedZipName; Entities = $zipEnts }
+                    $scanPayload | ConvertTo-Json -Compress:$false | Set-Content -Path $scanFile -Encoding UTF8 -ErrorAction SilentlyContinue
+                } catch { }
+            }
+            if ($zipEnts -and $zipEnts.Count -gt 0) {
+                $cacheEnts = @($cacheObj.EntityAttributes.PSObject.Properties | ForEach-Object { $_.Name.Trim().ToLowerInvariant() })
+                $missing = @($zipEnts | Where-Object { $e = $_.Trim().ToLowerInvariant(); $cacheEnts -notcontains $e })
+                if ($missing.Count -eq 0) {
+                    Write-Host "  Zaznaczona paczka: " -NoNewline
+                    Write-Host "wszystkie encje w cache." -ForegroundColor Green
+                } else {
+                    Write-Host "  Zaznaczona paczka: " -NoNewline
+                    Write-Host "brakuje $($missing.Count) encji: $($missing -join ', ')" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "  Zaznaczona paczka: nie wykryto encji w zipie (lub blad odczytu)." -ForegroundColor DarkGray
+            }
+        }
+    } else {
+        Write-Host "  Cache metadanych: brak (uruchom opcje 5)" -ForegroundColor DarkGray
+    }
     Write-Host ""
 }
 
 do {
     Show-Menu
-    $choice = Read-Host "Wybierz opcje (0-4)"
+    $choice = Read-Host "Wybierz opcje (0-6)"
     Add-MenuLog -NoConsole ("Wybor: " + $choice)
     switch ($choice) {
         '1' {
@@ -197,7 +290,7 @@ do {
             if (-not (Test-Path $idMap)) { $idMap = '' }
             $outZip = Join-Path $outputDir ([System.IO.Path]::GetFileNameWithoutExtension($zipPath) + '_ForTarget.zip')
             try {
-                # Uruchom w osobnym procesie PowerShell – modul Microsoft.Xrm.Data.PowerShell nie laduje sie w hostach Cursor/VS Code
+                # Uruchom w osobnym procesie PowerShell - modul Microsoft.Xrm.Data.PowerShell nie laduje sie w hostach Cursor/VS Code
                 $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$transformScript`"", '-InputZipPath', "`"$zipPath`"", '-OutputZipPath', "`"$outZip`"")
                 if ($idMap) { $argList += '-IdMapPath'; $argList += "`"$idMap`"" }
                 if (Test-Path $configPath) { $argList += '-ConfigPath'; $argList += "`"$configPath`"" }
@@ -207,6 +300,7 @@ do {
                 $psi.WorkingDirectory = $scriptRoot
                 $psi.UseShellExecute = $false
                 $psi.CreateNoWindow = $false
+                Write-Host "Uruchamiam transformacje o $(Get-Date -Format 'HH:mm')..." -ForegroundColor Gray
                 $p = [System.Diagnostics.Process]::Start($psi)
                 $p.WaitForExit()
                 if ($p.ExitCode -eq 0) {
@@ -242,8 +336,123 @@ do {
             }
             pause
         }
+        '5' {
+            Add-MenuLog -NoConsole "Opcja 5: Pobierz metadane celu"
+            $metaScript = Join-Path $scriptRoot 'Lib\Export-TargetMetadataCache.ps1'
+            if (-not (Test-Path $metaScript)) {
+                Write-Host "Brak Lib\Export-TargetMetadataCache.ps1" -ForegroundColor Red
+                pause
+                break
+            }
+            if (-not (Test-Path $configPath)) {
+                Write-Host "Brak Config\CMTConfig.ps1 (Polaczenia.txt: Cel)." -ForegroundColor Red
+                pause
+                break
+            }
+            $zipForMeta = $script:LastZipPath
+            if (-not $zipForMeta -or -not (Test-Path $zipForMeta)) {
+                $inputZips = @(Get-ChildItem -Path $inputDir -Filter *.zip -File -ErrorAction SilentlyContinue)
+                if ($inputZips.Count -gt 0) { $zipForMeta = $inputZips[0].FullName }
+            }
+            try {
+                $metaArgStr = "-NoProfile -ExecutionPolicy Bypass -File `"$metaScript`" -ConfigPath `"$configPath`" -OutputDirectory `"$outputDir`""
+                if ($zipForMeta -and (Test-Path $zipForMeta)) {
+                    $metaArgStr += " -ZipPath `"$zipForMeta`""
+                    Write-Host "Encje do pobrania z wybranego zipa: $([System.IO.Path]::GetFileName($zipForMeta))" -ForegroundColor Gray
+                } else {
+                    Write-Host "Brak wybranego zipa - pobiorę encje domyślne (ustaw zip w opcji 1 dla encji z zipa)." -ForegroundColor Yellow
+                }
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = 'powershell.exe'
+                $psi.Arguments = $metaArgStr
+                $psi.WorkingDirectory = $scriptRoot
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $false
+                $p = [System.Diagnostics.Process]::Start($psi)
+                $p.WaitForExit()
+                if ($p.ExitCode -eq 0) {
+                    Write-Host "Cache metadanych zapisany w Output. Opcja 3 uzyje go (szybsza transformacja, bez polaczenia z CRM)." -ForegroundColor Green
+                } else { Write-Host "Kod wyjscia: $($p.ExitCode)" -ForegroundColor Yellow }
+            } catch {
+                Add-MenuLog ('BLAD opcja 5: ' + $_)
+                Write-Host ('BLAD: ' + $_) -ForegroundColor Red
+            }
+            pause
+        }
+        '6' {
+            # Uwaga: w stringach tylko ASCII (cudzyslowy " ', myslnik - nie en-dash)
+            Add-MenuLog -NoConsole "Opcja 6: Uzupelnij daty Uwag ze zrodla (wybor zip z Output, zmiana w tym samym pliku)"
+            $injectScript = Join-Path $scriptRoot 'Lib\Inject-AnnotationDatesFromSource.ps1'
+            if (-not (Test-Path $injectScript)) {
+                Write-Host "Brak Lib\Inject-AnnotationDatesFromSource.ps1" -ForegroundColor Red
+                pause
+                break
+            }
+            if (-not (Test-Path $configPath)) {
+                Write-Host "Brak Config\CMTConfig.ps1 (Polaczenia.txt: Zrodlo)." -ForegroundColor Red
+                pause
+                break
+            }
+            $outputZips = @(Get-ChildItem -Path $outputDir -Filter *.zip -File -ErrorAction SilentlyContinue | Sort-Object Name)
+            if ($outputZips.Count -eq 0) {
+                Write-Host "Brak zipow w Output ($outputDir). Wrzuc zip do tego folderu." -ForegroundColor Yellow
+                pause
+                break
+            }
+            Write-Host "Zipy w Output ($outputDir):" -ForegroundColor Cyan
+            for ($i = 0; $i -lt $outputZips.Count; $i++) {
+                Write-Host "  $($i + 1). $($outputZips[$i].Name)" -ForegroundColor White
+            }
+            $prompt = "Numer (1-$($outputZips.Count)) lub pelna sciezka do innego zipa"
+            if ($outputZips.Count -ge 1) { $prompt += " [Enter = 1]" }
+            $prompt += ": "
+            $p = (Read-Host $prompt).Trim()
+            if ([string]::IsNullOrWhiteSpace($p)) {
+                $zipPath = $outputZips[0].FullName
+            } elseif ($p -match '^\d+$') {
+                $idx = [int]$p
+                if ($idx -ge 1 -and $idx -le $outputZips.Count) {
+                    $zipPath = $outputZips[$idx - 1].FullName
+                } else {
+                    $zipPath = $p
+                }
+            } else {
+                $zipPath = $p
+                if (-not [System.IO.Path]::IsPathRooted($p) -and ($p -notmatch '^[A-Za-z]:')) {
+                    $inOutput = Join-Path $outputDir $p
+                    if (Test-Path $inOutput -PathType Leaf) { $zipPath = $inOutput }
+                }
+            }
+            if (-not (Test-Path $zipPath -PathType Leaf)) {
+                Write-Host "Plik nie istnieje: $zipPath" -ForegroundColor Red
+                pause
+                break
+            }
+            try {
+                $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$injectScript`"", '-InputZipPath', "`"$zipPath`"", '-OutputZipPath', "`"$zipPath`"", '-ConfigPath', "`"$configPath`"")
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = 'powershell.exe'
+                $psi.Arguments = $argList -join ' '
+                $psi.WorkingDirectory = $scriptRoot
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $false
+                Write-Host "Pobieranie createdon/modifiedon ze zrodla i zapis w wybranym zipie..." -ForegroundColor Gray
+                $p = [System.Diagnostics.Process]::Start($psi)
+                $p.WaitForExit()
+                if ($p.ExitCode -eq 0) {
+                    Write-Host "Zaktualizowano zip (w tym samym pliku): $zipPath" -ForegroundColor Green
+                    Write-Host "Mozesz teraz uruchomic opcje 3 (Transform) dla tego zipa." -ForegroundColor Cyan
+                } else {
+                    Write-Host ("Kod wyjscia: " + $p.ExitCode) -ForegroundColor Yellow
+                }
+            } catch {
+                Add-MenuLog ('BLAD opcja 6: ' + $_)
+                Write-Host ('BLAD: ' + $_) -ForegroundColor Red
+            }
+            pause
+        }
         '0' { Add-MenuLog -NoConsole 'Wyjscie'; exit 0 }
-        default { Write-Host 'Wybierz 0, 1, 2, 3 lub 4.' -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
+        default { Write-Host 'Wybierz 0, 1, 2, 3, 4, 5 lub 6.' -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
     }
 } while ($true)
 Add-MenuLog -NoConsole 'Koniec sesji'

@@ -4,6 +4,7 @@ Zmiany w projekcie narzędzia migracyjnego Dataverse.
 
 ## 2026-03-16
 
+- **Punkt powrotu: Uwagi (annotation) z oryginalną datą OK** – Tag `restore-uwagi-daty-2026-03-16`. Przepływ: opcja 3 (Transform) potem opcja 6 (Popraw daty Uwag); daty w ISO 8601; Inject używa dat z zipa gdy źródło nie zwraca rekordu; naprawa parsera (ASCII w stringach); reguła powershell-ascii-strings alwaysApply. (piotrek87)
 - **Punkt powrotu: import CMT przechodzi** – Commit do powrotu do działającej wersji po ewentualnych przyszłych problemach. (piotrek87)
 - **Wykluczanie encji z importu (EntitiesToExcludeFromImport)**: W configu lista encji do całkowitego pominięcia (np. salesliteratureitem); usuwane z data.xml i data_schema.xml, dzięki czemu CMT nie zgłasza „Missing Fields” i import się udaje. (piotrek87)
 - **Pomijanie pustych encji tylko w data.xml**: Usuwanie encji bez rekordów wykonywane wyłącznie w pliku danych; data_schema.xml nie jest już modyfikowany tą logiką (wcześniej schemat się psuł i CMT: „schemat jest nieprawidłowy”). (piotrek87)

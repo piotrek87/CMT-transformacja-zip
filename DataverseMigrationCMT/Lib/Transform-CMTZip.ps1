@@ -72,6 +72,22 @@ $script:StripFieldsNotInTarget = $StripFieldsNotInTarget
 
 # IdMap: podmiana GUID ownerow (zrodlo -> cel). Klucze musza byc czystym GUID (w zipie jest value="guid").
 # Jesli JSON ma klucze w formacie CRM (np. "guid systemuserid=xxx"), wyciagamy czysty GUID.
+# Normalizuje lancuch daty do ISO 8601 (Dataverse/CMT pewnie przyjmuje; format lokalny np. dd.MM.yyyy moze byc odrzucany dla czesci rekordow).
+function ConvertTo-DateTimeIso {
+    param([string]$DateStr)
+    if ([string]::IsNullOrWhiteSpace($DateStr)) { return $DateStr }
+    $s = $DateStr.Trim()
+    if ($s -match '^\d{4}-\d{2}-\d{2}T') { return $s }
+    try {
+        $dt = [DateTime]::Parse($s, [System.Globalization.CultureInfo]::InvariantCulture)
+        return $dt.ToString('o')
+    } catch {
+        try {
+            $dt = [DateTime]::Parse($s, [System.Globalization.CultureInfo]::GetCultureInfo('pl-PL'))
+            return $dt.ToString('o')
+        } catch { return $s }
+    }
+}
 function Get-PureGuidFromIdMapKey {
     param([string]$Key)
     if ([string]::IsNullOrWhiteSpace($Key)) { return $null }
@@ -581,9 +597,10 @@ function Convert-CMTXmlContent {
                     $entityHasOverrideInTarget = $script:targetAllowedAttrs[$enKey].Contains('overriddencreatedon')
                 }
                 if ($entityHasOverrideInTarget -and -not [string]::IsNullOrWhiteSpace($createdonVal)) {
+                    $overrideDateIso = ConvertTo-DateTimeIso $createdonVal
                     if ($overrideNode) {
-                        $overrideNode.InnerText = $createdonVal
-                        if ($useValueAttr) { $overrideNode.SetAttribute('value', $createdonVal) }
+                        $overrideNode.InnerText = $overrideDateIso
+                        if ($useValueAttr) { $overrideNode.SetAttribute('value', $overrideDateIso) }
                     } else {
                         if ($fieldLikeParent -and $fieldLikeParent.LocalName -match '^(field|Field)$') {
                             $ns = $fieldLikeParent.NamespaceURI
@@ -593,13 +610,13 @@ function Convert-CMTXmlContent {
                                 $newEl = $doc.CreateElement($fieldLikeParent.LocalName)
                             }
                             $newEl.SetAttribute('name', 'overriddencreatedon')
-                            $newEl.InnerText = $createdonVal
-                            if ($useValueAttr) { $newEl.SetAttribute('value', $createdonVal) }
+                            $newEl.InnerText = $overrideDateIso
+                            if ($useValueAttr) { $newEl.SetAttribute('value', $overrideDateIso) }
                             $parent = if ($fieldLikeParent.ParentNode -and $fieldLikeParent.ParentNode -ne $rec) { $fieldLikeParent.ParentNode } else { $rec }
                             [void]$parent.AppendChild($newEl)
                         } else {
                             $newEl = $doc.CreateElement('overriddencreatedon')
-                            $newEl.InnerText = $createdonVal
+                            $newEl.InnerText = $overrideDateIso
                             [void]$rec.AppendChild($newEl)
                         }
                     }

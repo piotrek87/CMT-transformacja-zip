@@ -1,7 +1,7 @@
 ---
 description: W plikach PowerShell uzywaj tylko ASCII w stringach - zero bledow parsera
 globs: "**/*.ps1"
-alwaysApply: false
+alwaysApply: true
 ---
 
 # PowerShell - tylko ASCII w stringach
