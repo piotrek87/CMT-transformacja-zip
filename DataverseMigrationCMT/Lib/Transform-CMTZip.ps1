@@ -24,6 +24,8 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
 if (-not (Test-Path $InputZipPath -PathType Leaf)) {
     throw "Plik zip nie istnieje: $InputZipPath"
 }
+$script:TransformStartTime = Get-Date
+Write-Host "Transformacja start: $($script:TransformStartTime.ToString('dd.MM.yyyy HH:mm:ss'))" -ForegroundColor Gray
 
 if ([string]::IsNullOrWhiteSpace($OutputZipPath)) {
     $dir = [System.IO.Path]::GetDirectoryName($InputZipPath)
@@ -54,7 +56,14 @@ if (-not [string]::IsNullOrWhiteSpace($ConfigPath) -and (Test-Path $ConfigPath -
         if ($cfg -and $cfg.LookupFieldsToStripFromImport -and $cfg.LookupFieldsToStripFromImport -is [array]) {
             $script:LookupFieldsToStripFromImport = @($cfg.LookupFieldsToStripFromImport)
         }
+        if ($cfg -and $cfg.EntitiesToExcludeFromImport -and $cfg.EntitiesToExcludeFromImport -is [array]) {
+            $script:EntitiesToExcludeFromImport = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+            foreach ($e in $cfg.EntitiesToExcludeFromImport) { if (-not [string]::IsNullOrWhiteSpace($e)) { [void]$script:EntitiesToExcludeFromImport.Add($e.Trim()) } }
+        }
     } catch { Write-Host "Nie udalo sie zaladowac configu: $($_.Message)" -ForegroundColor Yellow }
+}
+if (-not $script:EntitiesToExcludeFromImport -or $script:EntitiesToExcludeFromImport.Count -eq 0) {
+    $script:EntitiesToExcludeFromImport = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 }
 if (-not $script:LookupFieldsToStripFromImport -or $script:LookupFieldsToStripFromImport.Count -eq 0) {
     $script:LookupFieldsToStripFromImport = @('msdyn_accountkpiid', 'msdyn_contactkpiid', 'transactioncurrencyid', 'originatingleadid')
@@ -114,46 +123,37 @@ if ($null -ne $byDisplayNamePath -and (Test-Path $byDisplayNamePath -PathType Le
 # Pola dozwolone w celu (entity -> HashSet atrybutow) - do usuniecia atrybutow nie z celu
 $script:targetAllowedAttrs = @{}
 $script:connTarget = $null
-if (($StripFieldsNotInTarget -or $script:StripFieldsNotInTarget) -and -not [string]::IsNullOrWhiteSpace($TargetConnectionString)) {
-    if (Get-Module -ListAvailable -Name 'Microsoft.Xrm.Data.PowerShell') {
-        Import-Module Microsoft.Xrm.Data.PowerShell -Force -ErrorAction SilentlyContinue
-        try {
-            $script:connTarget = Get-CrmConnection -ConnectionString $TargetConnectionString -ErrorAction Stop
-            Write-Host "Polaczenie z celem OK - beda usuniete pola nieistniejace w celu."
-        } catch {
-            Write-Host "Brak polaczenia z celem - pomijam usuwanie pol." -ForegroundColor Yellow
-            Write-Host "  Blad: $($_.Exception.Message)" -ForegroundColor Gray
-            if ($_.Exception.InnerException) { Write-Host "  Inner: $($_.Exception.InnerException.Message)" -ForegroundColor Gray }
+
+# Klucz cache metadanych (zgodny z Export-TargetMetadataCache) – po URL celu
+function Get-TargetMetadataCacheKeyFromConnStr {
+    param([string]$ConnectionString)
+    if ([string]::IsNullOrWhiteSpace($ConnectionString)) { return '' }
+    $url = ''
+    foreach ($part in $ConnectionString.Split(';')) {
+        $s = $part.Trim()
+        if ($s.StartsWith('Url=', [StringComparison]::OrdinalIgnoreCase)) {
+            $val = $s.Substring(4).Trim()
+            if ($val.Length -ge 2 -and $val.StartsWith('"') -and $val.EndsWith('"')) { $val = $val.Substring(1, $val.Length - 2).Replace('""', '"') }
+            $url = $val.Trim().ToLowerInvariant()
+            break
         }
-    } else {
-        Write-Host "StripFieldsNotInTarget wymaga Microsoft.Xrm.Data.PowerShell - pomijam." -ForegroundColor Yellow
+    }
+    if ([string]::IsNullOrWhiteSpace($url)) { return 'default' }
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($url)
+        $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        $hex = [BitConverter]::ToString($hash) -replace '-', ''
+        return $hex.Substring(0, [Math]::Min(16, $hex.Length)).ToLowerInvariant()
+    } catch {
+        return ('u' + [Math]::Abs($url.GetHashCode()).ToString('x8'))
     }
 }
+
 $script:entityFiltersAttributes = $null
 try { $script:entityFiltersAttributes = [Microsoft.Xrm.Sdk.Metadata.EntityFilters]::Attributes } catch { }
 
-# Polaczenie do celu tez dla walidacji option setow (Report/Clear/Replace)
-$doOptionSetValidation = $script:OptionSetValidationAction -match '^(Report|Clear|Replace)$'
+$doOptionSetValidation = $script:OptionSetValidationAction -match '^(Report|Clear|Replace|Interactive)$'
 $script:doOptionSetValidation = $doOptionSetValidation
-if ($doOptionSetValidation -and $null -eq $script:connTarget -and -not [string]::IsNullOrWhiteSpace($TargetConnectionString)) {
-    if (Get-Module -ListAvailable -Name 'Microsoft.Xrm.Data.PowerShell') {
-        Import-Module Microsoft.Xrm.Data.PowerShell -Force -ErrorAction SilentlyContinue
-        try {
-            $script:connTarget = Get-CrmConnection -ConnectionString $TargetConnectionString -ErrorAction Stop
-            Write-Host "Polaczenie z celem OK - walidacja option setow (akcja: $($script:OptionSetValidationAction))." -ForegroundColor Gray
-        } catch {
-            Write-Host "Brak polaczenia z celem - pomijam walidacje option setow. $($_.Message)" -ForegroundColor Yellow
-            $doOptionSetValidation = $false
-        }
-    } else {
-        Write-Host "Walidacja option setow wymaga Microsoft.Xrm.Data.PowerShell - pomijam." -ForegroundColor Yellow
-        $doOptionSetValidation = $false
-    }
-}
-if ($doOptionSetValidation -and $script:connTarget) {
-    Write-Host "Walidacja option setow: wlaczona (akcja: $($script:OptionSetValidationAction))." -ForegroundColor Gray
-}
-
 $script:overrideCount = 0
 $script:ownerReplaceCount = 0
 $script:DuplicateRecordsRemovedCount = 0
@@ -166,13 +166,102 @@ $script:SourceConnectionString = $null
 $script:connSource = $null
 $script:SourceOptionSetCache = @{}
 $script:EntitiesFoundInZip = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$script:MetadataCacheLoaded = $false
+
+# Zaladuj cache metadanych celu (po inicjalizacji TargetOptionSetAllowed) – opcja 5 zapisuje, tu odczyt
+$outputDirForCache = [System.IO.Path]::GetDirectoryName($OutputZipPath)
+if ([string]::IsNullOrWhiteSpace($outputDirForCache)) { $outputDirForCache = (Get-Location).Path }
+if (-not [string]::IsNullOrWhiteSpace($TargetConnectionString)) {
+    $cacheKey = Get-TargetMetadataCacheKeyFromConnStr -ConnectionString $TargetConnectionString
+    if (-not [string]::IsNullOrWhiteSpace($cacheKey)) {
+        $metadataCachePath = Join-Path $outputDirForCache ("TargetMetadata_$cacheKey.json")
+        if (Test-Path $metadataCachePath -PathType Leaf) {
+            try {
+                $cacheJson = [System.IO.File]::ReadAllText($metadataCachePath, [System.Text.Encoding]::UTF8)
+                $cacheObj = $cacheJson | ConvertFrom-Json
+                if ($cacheObj -and $cacheObj.EntityAttributes) {
+                    foreach ($p in $cacheObj.EntityAttributes.PSObject.Properties) {
+                        $entKey = $p.Name.Trim().ToLowerInvariant()
+                        $arr = @($p.Value)
+                        $hs = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+                        foreach ($a in $arr) { if (-not [string]::IsNullOrWhiteSpace($a)) { [void]$hs.Add([string]$a) } }
+                        $script:targetAllowedAttrs[$entKey] = $hs
+                    }
+                }
+                if ($cacheObj -and $cacheObj.OptionSets) {
+                    foreach ($entProp in $cacheObj.OptionSets.PSObject.Properties) {
+                        $entKey = $entProp.Name.Trim().ToLowerInvariant()
+                        $script:TargetOptionSetAllowed[$entKey] = @{}
+                        foreach ($attrProp in $entProp.Value.PSObject.Properties) {
+                            $o = $attrProp.Value
+                            $allowedSet = [System.Collections.Generic.HashSet[int]]::new()
+                            $optionsList = [System.Collections.ArrayList]::new()
+                            foreach ($v in @($o.Allowed)) { [void]$allowedSet.Add([int]$v) }
+                            foreach ($opt in @($o.Options)) {
+                                $val = [int]$opt.Value
+                                $lbl = if ($opt.Label) { [string]$opt.Label } else { "($val)" }
+                                [void]$optionsList.Add([PSCustomObject]@{ Value = $val; Label = $lbl })
+                            }
+                            if ($allowedSet.Count -gt 0) {
+                                $script:TargetOptionSetAllowed[$entKey][$attrProp.Name] = @{ AllowedSet = $allowedSet; Options = $optionsList }
+                            }
+                        }
+                    }
+                }
+                $entCount = if ($cacheObj.EntityAttributes) { @($cacheObj.EntityAttributes.PSObject.Properties).Count } else { 0 }
+                $cacheDateStr = ''
+                if ($cacheObj.FetchedAt) {
+                    try {
+                        $dt = [DateTime]::Parse($cacheObj.FetchedAt)
+                        $cacheDateStr = ' Ostatni pobor cache: ' + $dt.ToString('dd.MM.yyyy HH:mm')
+                    } catch { $cacheDateStr = ' Ostatni pobor cache: ' + [string]$cacheObj.FetchedAt }
+                } else {
+                    $fi = Get-Item -LiteralPath $metadataCachePath -ErrorAction SilentlyContinue
+                    if ($fi) { $cacheDateStr = ' Plik cache z: ' + $fi.LastWriteTime.ToString('dd.MM.yyyy HH:mm') }
+                }
+                Write-Host "Zaladowano cache metadanych celu: $metadataCachePath (encji: $entCount). Strip i option sety z cache (bez polaczenia z CRM).$cacheDateStr" -ForegroundColor Green
+                $script:MetadataCacheLoaded = $true
+            } catch {
+                Write-Host "Nie udalo sie zaladowac cache metadanych: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+    }
+}
+if ($script:MetadataCacheLoaded) {
+    Write-Host "Transformacja uzywa cache metadanych - bez polaczenia z CRM (zadnych zapytan API do celu)." -ForegroundColor Green
+} else {
+    if (($script:StripFieldsNotInTarget -or $doOptionSetValidation) -and -not [string]::IsNullOrWhiteSpace($TargetConnectionString)) {
+        if (Get-Module -ListAvailable -Name 'Microsoft.Xrm.Data.PowerShell') {
+            Import-Module Microsoft.Xrm.Data.PowerShell -Force -ErrorAction SilentlyContinue
+            try {
+                $script:connTarget = Get-CrmConnection -ConnectionString $TargetConnectionString -ErrorAction Stop
+                if ($script:StripFieldsNotInTarget) { Write-Host "Polaczenie z celem OK - beda usuniete pola nieistniejace w celu." -ForegroundColor Gray }
+                if ($doOptionSetValidation) { Write-Host "Polaczenie z celem OK - walidacja option setow (akcja: $($script:OptionSetValidationAction))." -ForegroundColor Gray }
+            } catch {
+                Write-Host "Brak polaczenia z celem - pomijam strip pol i walidacje option setow. $($_.Exception.Message)" -ForegroundColor Yellow
+                $script:connTarget = $null
+                $doOptionSetValidation = $false
+            }
+        } else {
+            Write-Host "Strip/walidacja option setow wymaga Microsoft.Xrm.Data.PowerShell - pomijam." -ForegroundColor Yellow
+            $doOptionSetValidation = $false
+        }
+    }
+    if ($script:connTarget) {
+        Write-Host "Wskazowka: Aby przyspieszyc nastepna transformacje, uruchom w menu opcje 5 (Pobierz metadane celu) - unikniesz polaczen z CRM." -ForegroundColor Cyan
+    }
+}
+if ($doOptionSetValidation -and ($script:connTarget -or $script:MetadataCacheLoaded)) {
+    Write-Host "Walidacja option setow: wlaczona (akcja: $($script:OptionSetValidationAction))." -ForegroundColor Gray
+}
 
 function Get-TargetOptionSetAllowedForEntity {
     param([object]$Conn, [string]$EntityLogicalName)
-    if (-not $Conn -or [string]::IsNullOrWhiteSpace($EntityLogicalName)) { return @{} }
+    if ([string]::IsNullOrWhiteSpace($EntityLogicalName)) { return @{} }
     if ($script:TargetOptionSetAllowed.ContainsKey($EntityLogicalName)) {
         return $script:TargetOptionSetAllowed[$EntityLogicalName]
     }
+    if (-not $Conn) { return @{} }
     $result = @{}
     try {
         if ($script:entityFiltersAttributes) {
@@ -347,6 +436,7 @@ function Convert-CMTXmlContent {
     $content = $Content
     $changed = $false
     try {
+        Write-Host "    Laduje XML (DOM)..." -ForegroundColor DarkGray
         $doc = [xml]$content
         $entityNodes = @()
         foreach ($n in $doc.SelectNodes('//*[local-name()="entity" and (@name or @Name)]')) { $entityNodes += $n }
@@ -358,6 +448,7 @@ function Convert-CMTXmlContent {
                 if (($ln -eq 'entity' -or $ln -eq 'Entity') -and ($child.GetAttribute('name') -or $child.GetAttribute('Name'))) { $entityNodes += $child }
             }
         }
+        Write-Host "    Encje: $($entityNodes.Count), przetwarzam rekordy..." -ForegroundColor DarkGray
         $stripLookupSet = $null
         if ($script:LookupFieldsToStripFromImport -and $script:LookupFieldsToStripFromImport.Count -gt 0) {
             $stripLookupSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -421,6 +512,7 @@ function Convert-CMTXmlContent {
                     foreach ($n in $toStrip) { if ($n.ParentNode) { [void]$n.ParentNode.RemoveChild($n); $changed = $true; $script:LookupFieldsStrippedCount++ } }
                 }
                 $createdonVal = $null
+                $modifiedonVal = $null
                 $overrideNode = $null
                 $fieldLikeParent = $null
                 $useValueAttr = $false
@@ -438,6 +530,10 @@ function Convert-CMTXmlContent {
                             if ([string]::IsNullOrWhiteSpace($createdonVal)) { $createdonVal = $child.GetAttribute('Value') }
                             if (-not [string]::IsNullOrWhiteSpace($createdonVal)) { $useValueAttr = $true }
                         }
+                    }
+                    if ($cname -eq 'modifiedon') {
+                        $modifiedonVal = $child.InnerText.Trim()
+                        if ([string]::IsNullOrWhiteSpace($modifiedonVal)) { $modifiedonVal = $child.GetAttribute('value'); if ([string]::IsNullOrWhiteSpace($modifiedonVal)) { $modifiedonVal = $child.GetAttribute('Value') } }
                     }
                     if ($cname -eq 'overriddencreatedon') { $overrideNode = $child }
                     if ($cname -eq 'ownerid' -or $cname -eq 'owner') {
@@ -470,12 +566,21 @@ function Convert-CMTXmlContent {
                             }
                         }
                     }
-                    if ($script:doOptionSetValidation -and $script:connTarget -and -not [string]::IsNullOrWhiteSpace($cname)) {
+                    if ($script:doOptionSetValidation -and ($script:connTarget -or $script:MetadataCacheLoaded) -and -not [string]::IsNullOrWhiteSpace($cname)) {
                         if (Invoke-OptionSetValidationForField -Ent $ent -Rec $rec -Child $child -Cname $cname -ConnTarget $script:connTarget) { $changed = $true }
                     }
                 }
-                # Ustaw overriddencreatedon raz na rekord (nie w petli po polach - wtedy dodawaloby sie N razy)
-                if (-not [string]::IsNullOrWhiteSpace($createdonVal)) {
+                # Dla annotation: jesli w zipie nie ma createdon, uzyj modifiedon jako daty (oryginalna data utworzenia)
+                if ([string]::IsNullOrWhiteSpace($createdonVal) -and -not [string]::IsNullOrWhiteSpace($modifiedonVal) -and [string]::Equals($en, 'annotation', [StringComparison]::OrdinalIgnoreCase)) {
+                    $createdonVal = $modifiedonVal
+                }
+                # Overriddencreatedon tylko tam gdzie cel ma to pole (np. salesliteratureitem w niektorych orgach go nie ma - CMT: Missing Fields)
+                $enKey = $en.Trim().ToLowerInvariant()
+                $entityHasOverrideInTarget = $false
+                if ($script:targetAllowedAttrs -and $script:targetAllowedAttrs.ContainsKey($enKey)) {
+                    $entityHasOverrideInTarget = $script:targetAllowedAttrs[$enKey].Contains('overriddencreatedon')
+                }
+                if ($entityHasOverrideInTarget -and -not [string]::IsNullOrWhiteSpace($createdonVal)) {
                     if ($overrideNode) {
                         $overrideNode.InnerText = $createdonVal
                         if ($useValueAttr) { $overrideNode.SetAttribute('value', $createdonVal) }
@@ -500,14 +605,19 @@ function Convert-CMTXmlContent {
                     }
                     $changed = $true
                     $script:overrideCount++
+                } elseif (-not $entityHasOverrideInTarget -and $overrideNode -and $overrideNode.ParentNode) {
+                    [void]$overrideNode.ParentNode.RemoveChild($overrideNode)
+                    $changed = $true
                 }
             }
         }
-        if ($script:StripFieldsNotInTarget -and $script:connTarget) {
+        $doStrip = $script:StripFieldsNotInTarget -and ($script:connTarget -or ($script:targetAllowedAttrs -and $script:targetAllowedAttrs.Count -gt 0))
+        if ($doStrip) {
             foreach ($ent in $entityNodes) {
                 $entName = $ent.GetAttribute('name')
                 if ([string]::IsNullOrWhiteSpace($entName)) { continue }
                 if (-not $script:targetAllowedAttrs.ContainsKey($entName)) {
+                    if (-not $script:connTarget) { continue }
                     try {
                         if ($script:entityFiltersAttributes -ne $null) {
                             $meta = Get-CrmEntityMetadata -Conn $script:connTarget -EntityLogicalName $entName -EntityFilters $script:entityFiltersAttributes -ErrorAction Stop
@@ -566,6 +676,50 @@ function Convert-CMTXmlContent {
                 }
             }
         }
+        # Pomijaj encje bez rekordow tylko w pliku danych (NIE w data_schema.xml - tam sa definicje, nie rekordy)
+        # Oraz encje z listy EntitiesToExcludeFromImport (np. salesliteratureitem gdy cel ma inna wersje)
+        $isDataFile = $File -and [string]::Equals($File.Name, 'data.xml', [StringComparison]::OrdinalIgnoreCase)
+        if ($isDataFile) {
+            $entitiesToRemove = [System.Collections.ArrayList]::new()
+            foreach ($ent in $entityNodes) {
+                $en = $ent.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($en)) { $en = $ent.GetAttribute('Name') }
+                $recs = @($ent.SelectNodes('.//*[local-name()="record"]')) + @($ent.SelectNodes('.//*[local-name()="Record"]'))
+                $remove = ($recs.Count -eq 0) -or ($script:EntitiesToExcludeFromImport -and $script:EntitiesToExcludeFromImport.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($en) -and $script:EntitiesToExcludeFromImport.Contains($en))
+                if ($remove) { [void]$entitiesToRemove.Add([PSCustomObject]@{ Node = $ent; EntityName = $en }) }
+            }
+            foreach ($item in $entitiesToRemove) {
+                if ($item.Node.ParentNode) {
+                    [void]$item.Node.ParentNode.RemoveChild($item.Node)
+                    if (-not [string]::IsNullOrWhiteSpace($item.EntityName)) { [void]$script:EntitiesFoundInZip.Remove($item.EntityName) }
+                    $changed = $true
+                }
+            }
+            if ($entitiesToRemove.Count -gt 0) {
+                $removedNames = @($entitiesToRemove | ForEach-Object { $_.EntityName } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                Write-Host "    Pominieto encje bez rekordow / z listy wykluczen: $($removedNames -join ', ')." -ForegroundColor DarkGray
+            }
+        }
+        # W data_schema.xml usun definicje encji z listy wykluczen (zeby CMT nie walidowal Missing Fields)
+        $isSchemaFile = $File -and [string]::Equals($File.Name, 'data_schema.xml', [StringComparison]::OrdinalIgnoreCase)
+        if ($isSchemaFile -and $script:EntitiesToExcludeFromImport -and $script:EntitiesToExcludeFromImport.Count -gt 0) {
+            $schemaEntitiesToRemove = [System.Collections.ArrayList]::new()
+            foreach ($ent in $entityNodes) {
+                $en = $ent.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($en)) { $en = $ent.GetAttribute('Name') }
+                if (-not [string]::IsNullOrWhiteSpace($en) -and $script:EntitiesToExcludeFromImport.Contains($en)) {
+                    [void]$schemaEntitiesToRemove.Add([PSCustomObject]@{ Node = $ent; EntityName = $en })
+                }
+            }
+            foreach ($item in $schemaEntitiesToRemove) {
+                if ($item.Node.ParentNode) {
+                    [void]$item.Node.ParentNode.RemoveChild($item.Node)
+                    $changed = $true
+                }
+            }
+            if ($schemaEntitiesToRemove.Count -gt 0) {
+                $removedSchemaNames = @($schemaEntitiesToRemove | ForEach-Object { $_.EntityName })
+                Write-Host "    Z schematu usunieto encje z listy wykluczen: $($removedSchemaNames -join ', ')." -ForegroundColor DarkGray
+            }
+        }
         if ($changed) { $content = $doc.OuterXml }
         if ($displayNameToGuid.Count -gt 0) {
             $contentBeforeDn = $content
@@ -585,7 +739,13 @@ function Convert-CMTXmlContent {
 
 function Invoke-TransformCMTFiles {
     param([System.IO.FileInfo[]]$Files)
+    $total = $Files.Count
+    $current = 0
     foreach ($f in $Files) {
+        $current++
+        if ($total -gt 3 -and ($current -eq 1 -or $current -eq $total -or ($current % 10 -eq 0))) {
+            Write-Host "  Przetwarzam pliki... $current / $total" -ForegroundColor DarkGray
+        }
         $content = $null
         try {
             $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
@@ -604,6 +764,8 @@ function Invoke-TransformCMTFiles {
             }
         }
         if ($f.Extension -eq '.xml') {
+            $sizeMb = [Math]::Round($content.Length / 1MB, 1).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+            Write-Host "  Plik $current/$total : $($f.Name) ($sizeMb MB) - parsowanie i transformacja (moze potrwac)..." -ForegroundColor Gray
             $res = Convert-CMTXmlContent -Content $content -File $f
             $content = $res.Content
             $changed = $res.Changed
@@ -619,30 +781,49 @@ try {
     [System.IO.Compression.ZipFile]::ExtractToDirectory($InputZipPath, $tempDir)
     $files = Get-ChildItem -Path $tempDir -Recurse -File
     if ($guidMap.Count -gt 0) {
-        $allContent = ($files | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8) }) -join "`n"
-        $found = 0
-        foreach ($src in $guidMap.Keys) {
-            if ($allContent.IndexOf($src, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $found++ }
+        $foundGuids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($f in $files) {
+            $text = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+            foreach ($src in $guidMap.Keys) {
+                if (-not $foundGuids.Contains($src) -and $text.IndexOf($src, [StringComparison]::OrdinalIgnoreCase) -ge 0) { [void]$foundGuids.Add($src) }
+            }
+            if ($foundGuids.Count -eq $guidMap.Count) { break }
         }
+        $found = $foundGuids.Count
         if ($found -eq 0) {
             Write-Host 'W zipie nie ma GUIDow z IdMap (ownerid moze byc jako imie i nazwisko). Uzycie mapowania po display name (CMT_IdMap_ByDisplayName.json).' -ForegroundColor Gray
         } else {
             Write-Host ('W zipie znaleziono ' + $found + ' z ' + $guidMap.Count + ' GUIDow z IdMap - podmiana ownerow bedzie wykonana.') -ForegroundColor Gray
         }
     }
+    # Jedna transformacja; przy Interactive pytanie o option set przy pierwszym wystapieniu kazdego problemu (bez wstepnego skanowania)
+    if ($doOptionSetValidation -and ($script:connTarget -or $script:MetadataCacheLoaded)) {
+        Write-Host "Walidacja option setow: wlaczona (akcja: $($script:OptionSetValidationAction)). Pytania w trakcie transformacji przy pierwszym wystapieniu." -ForegroundColor Gray
+    }
     [void]$script:EntitiesFoundInZip.Clear()
     Invoke-TransformCMTFiles -Files $files
     $entitiesList = @($script:EntitiesFoundInZip | Sort-Object)
     if ($entitiesList.Count -gt 0) {
         Write-Host ('W zipie przetworzono encje: ' + ($entitiesList -join ', ') + '.') -ForegroundColor Gray
+        if ($script:MetadataCacheLoaded -and $script:targetAllowedAttrs -and $script:targetAllowedAttrs.Count -gt 0) {
+            $missingInCache = [System.Collections.ArrayList]::new()
+            foreach ($e in $entitiesList) {
+                $ek = $e.Trim().ToLowerInvariant()
+                if (-not $script:targetAllowedAttrs.ContainsKey($ek)) { [void]$missingInCache.Add($e) }
+            }
+            if ($missingInCache.Count -eq 0) {
+                Write-Host "Cache: wszystkie encje z zaznaczonej paczki sa w cache." -ForegroundColor Green
+            } else {
+                Write-Host ("Cache: brakuje " + $missingInCache.Count + " encji: " + ($missingInCache -join ', ')) -ForegroundColor Yellow
+                Write-Host "  Uruchom opcje 5 (Pobierz metadane celu) z tym zipem, zeby uzupelnic cache." -ForegroundColor Gray
+            }
+        }
+        $lastZipEntitiesPath = Join-Path $outputDirForCache 'CMT_LastZipEntities.json'
+        try {
+            $lastRunPayload = @{ ZipPath = $InputZipPath; ZipName = [System.IO.Path]::GetFileName($InputZipPath); Entities = @($entitiesList); CheckedAt = (Get-Date).ToString('o') }
+            $lastRunPayload | ConvertTo-Json -Compress:$false | Set-Content -Path $lastZipEntitiesPath -Encoding UTF8 -ErrorAction Stop
+        } catch { }
         Write-Host 'Uwaga: W tym zipie sa tylko te encje. Jesli przy imporcie bedzie brakowac rekordow lub calych encji - dodaj do folderu Input zip z CMT zawierajacy brakujace encje i uruchom opcje 3 dla tego zipa.' -ForegroundColor Yellow
-    }
-
-    # Raport walidacji option setow (Report/Clear/Replace) + opcjonalnie interaktywna korekta i ponowna transformacja
-    $didOptionSetCorrection = $false
-    if ($doOptionSetValidation -and $script:OptionSetIssues.Count -eq 0) {
-        Write-Host "Walidacja option setow: sprawdzono rekordy - nie znaleziono wartosci niepasujacych do celu." -ForegroundColor Gray
-        Write-Host "  Jesli przy imporcie CMT pojawi sie blad dot. option setu (np. wartosc nie dozwolona), sprawdz Config: OptionSetValidationAction=Report i polaczenie do celu (Polaczenia.txt)." -ForegroundColor DarkGray
     }
     if ($doOptionSetValidation -and $script:OptionSetIssues -and $script:OptionSetIssues.Count -gt 0) {
         $reportDir = Split-Path $OutputZipPath -Parent
@@ -650,70 +831,18 @@ try {
         $reportName = "CMT_OptionSetValidation_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".csv"
         $reportPath = Join-Path $reportDir $reportName
         $script:OptionSetIssues | Export-Csv -Path $reportPath -NoTypeInformation -Encoding UTF8
-        Write-Host ""
-        Write-Host ('Walidacja option setow: znaleziono ' + $script:OptionSetIssues.Count + ' niepasujacych wartosci (akcja: ' + $script:OptionSetValidationAction + '). Raport: ' + $reportPath) -ForegroundColor Yellow
-        Write-Host '  Rekordy z wartoscia option set nieistniejaca w celu:' -ForegroundColor Yellow
-        foreach ($issue in $script:OptionSetIssues) {
-            $recInfo = if (-not [string]::IsNullOrWhiteSpace($issue.RecordName)) { $issue.RecordName } else { $issue.RecordId }
-            Write-Host ('    Encja: ' + $issue.Entity + ' | Rekord: ' + $recInfo + ' | Pole: ' + $issue.Field + ' | Wartosc w zipie: ' + [string]$issue.ValueInZip + ' | Dozwolone w celu: ' + $issue.AllowedValues) -ForegroundColor Yellow
+        Write-Host ('Walidacja option setow: znaleziono ' + $script:OptionSetIssues.Count + ' niepasujacych wartosci. Raport: ' + $reportPath) -ForegroundColor Yellow
+        if ($script:OptionSetValidationAction -eq 'Report') {
+            Write-Host '  Aby wybrac zamienniki, ustaw w Config OptionSetValidationAction=Interactive i uruchom transformacje ponownie.' -ForegroundColor Gray
         }
-        Write-Host ""
-        Write-Host '--- Przejdzmy przez bledy: wybierz na jaka opcje ZE ZRODLA zamienic (numer + nazwa). Ta sama decyzja dla wszystkich rekordow z ta sama encja, pole i wartosc. ---' -ForegroundColor Cyan
-        if (-not $script:connSource -and $script:SourceConnectionString) {
-            if (Get-Module -ListAvailable -Name 'Microsoft.Xrm.Data.PowerShell') {
-                Import-Module Microsoft.Xrm.Data.PowerShell -Force -ErrorAction SilentlyContinue
-                try {
-                    $script:connSource = Get-CrmConnection -ConnectionString $script:SourceConnectionString -ErrorAction Stop
-                    Write-Host '  Polaczenie ze zrodlem OK - beda pokazane opcje ze zrodla (numer=nazwa).' -ForegroundColor Gray
-                } catch {
-                    Write-Host ('  Brak polaczenia ze zrodlem - wybor tylko z opcji celu. ' + $_.Message) -ForegroundColor Yellow
-                }
-            }
-        }
-        $seenKeys = @{}
-        foreach ($issue in $script:OptionSetIssues) {
-            $key = $issue.Entity + '|' + $issue.Field + '|' + [string]$issue.ValueInZip
-            if ($seenKeys[$key]) { continue }
-            $seenKeys[$key] = $true
-            $attrInfo = $null
-            if ($script:TargetOptionSetAllowed -and $script:TargetOptionSetAllowed.ContainsKey($issue.Entity) -and $script:TargetOptionSetAllowed[$issue.Entity].ContainsKey($issue.Field)) {
-                $attrInfo = $script:TargetOptionSetAllowed[$issue.Entity][$issue.Field]
-            }
-            if (-not $attrInfo) {
-                Write-Host ('  Pomijam (brak metadanych celu): encja=' + $issue.Entity + ', pole=' + $issue.Field) -ForegroundColor Gray
-                continue
-            }
-            $sourceOpts = $null
-            if ($script:connSource) {
-                $sourceOpts = Get-SourceOptionSetOptions -Conn $script:connSource -EntityLogicalName $issue.Entity -AttributeLogicalName $issue.Field
-            }
-            Get-OptionSetUserChoice -Key $key -AttrInfo $attrInfo -AllowedSet $attrInfo.AllowedSet -EntName $issue.Entity -Cname $issue.Field -ValInt $issue.ValueInZip -SourceOptions $sourceOpts
-        }
-        Write-Host ""
-        Write-Host 'Ponawiam transformacje z Twoimi wyborami...' -ForegroundColor Cyan
-        $savedAction = $script:OptionSetValidationAction
-        $script:OptionSetValidationAction = 'Interactive'
-        $script:OptionSetIssues.Clear()
-        $tempDir2 = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString('N'))
-        try {
-            [System.IO.Compression.ZipFile]::ExtractToDirectory($InputZipPath, $tempDir2)
-            $files2 = Get-ChildItem -Path $tempDir2 -Recurse -File
-            Invoke-TransformCMTFiles -Files $files2
-            if (Test-Path $OutputZipPath -PathType Leaf) { Remove-Item $OutputZipPath -Force }
-            [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir2, $OutputZipPath)
-            Write-Host ('Zapisano (po poprawkach option setow): ' + $OutputZipPath) -ForegroundColor Green
-            $didOptionSetCorrection = $true
-        } finally {
-            if (Test-Path $tempDir2) { Remove-Item $tempDir2 -Recurse -Force -ErrorAction SilentlyContinue }
-        }
-        $script:OptionSetValidationAction = $savedAction
     }
 
-    if (-not $didOptionSetCorrection) {
-        if (Test-Path $OutputZipPath -PathType Leaf) { Remove-Item $OutputZipPath -Force }
-        [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $OutputZipPath)
-        Write-Host ('Zapisano: ' + $OutputZipPath)
-    }
+    if (Test-Path $OutputZipPath -PathType Leaf) { Remove-Item $OutputZipPath -Force }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $OutputZipPath)
+    $elapsed = (Get-Date) - $script:TransformStartTime
+    $minStr = [Math]::Round($elapsed.TotalMinutes, 1).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    Write-Host "Zakonczono: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss') (trwalo: $minStr min)" -ForegroundColor Gray
+    Write-Host ('Zapisano: ' + $OutputZipPath)
     if ($script:overrideCount -gt 0) { Write-Host ('Ustawiono overriddencreatedon w ' + $script:overrideCount + ' rekordach (oryginalna data utworzenia).') -ForegroundColor Gray }
     if ($script:DuplicateOverrideRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateOverrideRemovedCount + ' zduplikowanych pol overriddencreatedon w rekordach (bug eksportu).') -ForegroundColor Gray }
     if ($script:LookupFieldsStrippedCount -gt 0) { Write-Host ('Usunieto ' + $script:LookupFieldsStrippedCount + ' pol lookup (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid) - brak w celu.') -ForegroundColor Gray }

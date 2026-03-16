@@ -1,5 +1,7 @@
 # DataverseMigrationCMT
 
+**Repozytorium:** [https://github.com/piotrek87/CMT-transformacja-zip](https://github.com/piotrek87/CMT-transformacja-zip)
+
 Aplikacja **modyfikuje zip** wyeksportowany z CMT: podmienia właścicieli (IdMap), ustawia oryginalne daty utworzenia (overriddencreatedon), usuwa pola nieistniejące w celu. **Importu nie robi** – gotowy zip (`*_ForTarget.zip`) importujesz sam (CMT Import data lub inne narzędzie).
 
 ## Przepływ (CMT Export → 2 → 3 → Ty importujesz)

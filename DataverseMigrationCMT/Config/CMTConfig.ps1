@@ -77,6 +77,10 @@ $SchemaEntityOrder = @(
     'campaign', 'campaignactivity', 'campaignresponse', 'list', 'listmember'
 )
 
+# Encje do calkowitego pominiecia przy imporcie (usuwane z data.xml i data_schema.xml).
+# Np. salesliteratureitem gdy cel ma inna wersje encji (CMT: Missing Fields) i nie migrujesz tej tabeli.
+$EntitiesToExcludeFromImport = @('salesliteratureitem')
+
 # Pola lookup do usuniecia z zipa przed importem (encje w zrodle maja GUID, w celu brak – CMT failuje Stage).
 # Usuniecie z XML = import nie probuje lookup; w celu pole bedzie puste.
 $LookupFieldsToStripFromImport = @(
@@ -93,7 +97,7 @@ $LookupFieldsToStripFromImport = @(
 # - Replace   = ustaw na wartosc z OptionSetFallbackValues (np. industrycode=82 jako "Inne")
 # - Interactive = przy kazdej niepasujacej wartosci pytaj (opcje ze zrodla lub z celu), wybierz zamienic / wyczysc / pomin
 # OptionSetFallbackValues: uzywane gdy Replace (nazwa_pola -> wartosc int w celu, np. industrycode = 82)
-$OptionSetValidationAction = 'Report'
+$OptionSetValidationAction = 'Interactive'
 $OptionSetFallbackValues   = @{ industrycode = 82 }
 
 @{
@@ -112,4 +116,5 @@ $OptionSetFallbackValues   = @{ industrycode = 82 }
     OptionSetValidationAction     = $OptionSetValidationAction
     OptionSetFallbackValues       = $OptionSetFallbackValues
     LookupFieldsToStripFromImport = $LookupFieldsToStripFromImport
+    EntitiesToExcludeFromImport  = $EntitiesToExcludeFromImport
 }

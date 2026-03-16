@@ -2,6 +2,13 @@
 
 Zmiany w projekcie narzędzia migracyjnego Dataverse.
 
+## 2026-03-16
+
+- **Punkt powrotu: import CMT przechodzi** – Commit do powrotu do działającej wersji po ewentualnych przyszłych problemach. (piotrek87)
+- **Wykluczanie encji z importu (EntitiesToExcludeFromImport)**: W configu lista encji do całkowitego pominięcia (np. salesliteratureitem); usuwane z data.xml i data_schema.xml, dzięki czemu CMT nie zgłasza „Missing Fields” i import się udaje. (piotrek87)
+- **Pomijanie pustych encji tylko w data.xml**: Usuwanie encji bez rekordów wykonywane wyłącznie w pliku danych; data_schema.xml nie jest już modyfikowany tą logiką (wcześniej schemat się psuł i CMT: „schemat jest nieprawidłowy”). (piotrek87)
+- **README: adres repozytorium** – Link do GitHub (piotrek87/CMT-transformacja-zip) w dokumentacji. (piotrek87)
+
 ## 2026-03-14
 
 - **Punkt powrotu: ustawianie option setow dziala**: Tag `v1.2-option-set-ok` - przy opcji 3 (Transformuj zip) walidacja option setow wykrywa wartosci niepasujace do celu (np. industrycode=15), raport CSV, interaktywny wybor zamiennika ZE ZRODLA lub z celu (lista po jednej opcji w linii). Wymaga OptionSetValidationAction=Report i polaczenia do celu; opcje ze zrodla przy Polaczenia.txt (Zrodlo+Cel). (piotrek87)
