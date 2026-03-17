@@ -87,6 +87,7 @@ function Show-Menu {
     Write-Host "  4. Pokaz ostatni log bledow CMT (gdy import konczy sie Stage Failed)" -ForegroundColor White
     Write-Host "  5. Pobierz metadane celu (cache dla opcji 3, encje z wybranego zipa)" -ForegroundColor White
     Write-Host "  6. Popraw daty Uwag ze zrodla (uruchom PO opcji 3 na zipie *_ForTarget; wynik od razu do importu)" -ForegroundColor White
+    Write-Host "  7. Generuj IdMap encji (leady, szanse, kontakty, konta - zrodlo->cel; opcja 3 moze je uzyc)" -ForegroundColor White
     Write-Host "  0. Wyjscie" -ForegroundColor Gray
     Write-Host ""
     # Status: wybrany zip i data User Map
@@ -116,6 +117,26 @@ function Show-Menu {
         Write-Host $userMapDate.ToString('dd.MM.yyyy HH:mm') -ForegroundColor Cyan
     } else {
         Write-Host "  User Map: brak (uruchom opcje 2)" -ForegroundColor DarkGray
+    }
+    $leadIdMapFile = Join-Path $outputDir 'CMT_IdMap_Lead.json'
+    if (Test-Path $leadIdMapFile -PathType Leaf) {
+        $leadMapDate = (Get-Item $leadIdMapFile).LastWriteTime
+        Write-Host "  Lead IdMap: " -NoNewline
+        Write-Host $leadMapDate.ToString('dd.MM.yyyy HH:mm') -ForegroundColor Cyan
+    } else {
+        Write-Host "  Lead IdMap: brak (opcja 7)" -ForegroundColor DarkGray
+    }
+    $otherMaps = @('CMT_IdMap_Opportunity.json', 'CMT_IdMap_Contact.json', 'CMT_IdMap_Account.json')
+    $otherLabels = @('Szanse', 'Kontakty', 'Konta')
+    for ($i = 0; $i -lt $otherMaps.Count; $i++) {
+        $fp = Join-Path $outputDir $otherMaps[$i]
+        if (Test-Path $fp -PathType Leaf) {
+            $dt = (Get-Item $fp).LastWriteTime
+            Write-Host "  $($otherLabels[$i]) IdMap: " -NoNewline
+            Write-Host $dt.ToString('dd.MM.yyyy HH:mm') -ForegroundColor Cyan
+        } else {
+            Write-Host "  $($otherLabels[$i]) IdMap: brak (opcja 7)" -ForegroundColor DarkGray
+        }
     }
     $cacheFiles = @(Get-ChildItem -Path $outputDir -Filter 'TargetMetadata_*.json' -File -ErrorAction SilentlyContinue)
     if ($cacheFiles.Count -gt 0) {
@@ -181,7 +202,7 @@ function Show-Menu {
 
 do {
     Show-Menu
-    $choice = Read-Host "Wybierz opcje (0-6)"
+    $choice = Read-Host "Wybierz opcje (0-7)"
     Add-MenuLog -NoConsole ("Wybor: " + $choice)
     switch ($choice) {
         '1' {
@@ -289,11 +310,42 @@ do {
             $idMap = $script:IdMapPath
             if (-not (Test-Path $idMap)) { $idMap = '' }
             $outZip = Join-Path $outputDir ([System.IO.Path]::GetFileNameWithoutExtension($zipPath) + '_ForTarget.zip')
+            $useLeadIdMap = $true
+            $useOpportunityIdMap = $true
+            $useContactIdMap = $true
+            $useAccountIdMap = $true
+            $entityPrompts = @(
+                @{ File = 'CMT_IdMap_Lead.json'; Prompt = 'Uzyc mapowania leadow (objectid w uwagach)?'; Var = 'useLeadIdMap' }
+                @{ File = 'CMT_IdMap_Opportunity.json'; Prompt = 'Uzyc mapowania szans (opportunity)?'; Var = 'useOpportunityIdMap' }
+                @{ File = 'CMT_IdMap_Contact.json'; Prompt = 'Uzyc mapowania kontaktow (contact)?'; Var = 'useContactIdMap' }
+                @{ File = 'CMT_IdMap_Account.json'; Prompt = 'Uzyc mapowania kont (account)?'; Var = 'useAccountIdMap' }
+            )
+            if ($zipPath -match 'annotation') {
+                Write-Host "Uwaga: ten zip wyglada na paczke Uwag (annotation). Wybierz T przy mapowaniu leadow, inaczej import w CMT konczy sie bledem 'parent object type was present, but the ID was missing'." -ForegroundColor Yellow
+            }
+            foreach ($ep in $entityPrompts) {
+                $fp = Join-Path $outputDir $ep.File
+                if (Test-Path $fp -PathType Leaf) {
+                    $r = (Read-Host ($ep.Prompt + ' [T/n]: ')).Trim().ToLowerInvariant()
+                    if ($r -eq 'n' -or $r -eq 'no') {
+                        switch ($ep.Var) {
+                            'useLeadIdMap' { $useLeadIdMap = $false }
+                            'useOpportunityIdMap' { $useOpportunityIdMap = $false }
+                            'useContactIdMap' { $useContactIdMap = $false }
+                            'useAccountIdMap' { $useAccountIdMap = $false }
+                        }
+                    }
+                }
+            }
             try {
                 # Uruchom w osobnym procesie PowerShell - modul Microsoft.Xrm.Data.PowerShell nie laduje sie w hostach Cursor/VS Code
                 $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$transformScript`"", '-InputZipPath', "`"$zipPath`"", '-OutputZipPath', "`"$outZip`"")
                 if ($idMap) { $argList += '-IdMapPath'; $argList += "`"$idMap`"" }
                 if (Test-Path $configPath) { $argList += '-ConfigPath'; $argList += "`"$configPath`"" }
+                if (-not $useLeadIdMap) { $argList += '-NoLeadIdMap' }
+                if (-not $useOpportunityIdMap) { $argList += '-NoOpportunityIdMap' }
+                if (-not $useContactIdMap) { $argList += '-NoContactIdMap' }
+                if (-not $useAccountIdMap) { $argList += '-NoAccountIdMap' }
                 $psi = New-Object System.Diagnostics.ProcessStartInfo
                 $psi.FileName = 'powershell.exe'
                 $psi.Arguments = $argList -join ' '
@@ -306,6 +358,11 @@ do {
                 if ($p.ExitCode -eq 0) {
                     Write-Host "Gotowy zip: $outZip" -ForegroundColor Green
                     Write-Host "W zipie: ownerzy podmienieni (IdMap), overriddencreatedon = oryginalna data." -ForegroundColor Cyan
+                    if ($useLeadIdMap) {
+                        Write-Host "Mapowanie leadow (objectid w uwagach): wlaczone - GUID leadow podmienione na cel." -ForegroundColor Green
+                    } else {
+                        Write-Host "Uwaga: mapowanie leadow wylaczone. Jesli zip zawiera Uwagi (annotation), import moze konczyc sie bledem 'parent object type was present, but the ID was missing'. Uruchom opcje 3 ponownie i wybierz T przy mapowaniu leadow." -ForegroundColor Yellow
+                    }
                     Write-Host ""
                     Write-Host "W CMT (Import data) w polu Plik ZIP wybierz DOKLADNIE ten plik:" -ForegroundColor Yellow
                     Write-Host "  $outZip" -ForegroundColor White
@@ -451,8 +508,57 @@ do {
             }
             pause
         }
+        '7' {
+            Add-MenuLog -NoConsole "Opcja 7: Generuj IdMap encji (leady, szanse, kontakty, konta)"
+            $leadMapScript = Join-Path $scriptRoot 'Lib\New-CMTLeadIdMap.ps1'
+            $otherMapScript = Join-Path $scriptRoot 'Lib\New-CMTOtherEntityIdMaps.ps1'
+            if (-not (Test-Path $leadMapScript)) {
+                Write-Host "Brak Lib\New-CMTLeadIdMap.ps1" -ForegroundColor Red
+                pause
+                break
+            }
+            if (-not (Test-Path $otherMapScript)) {
+                Write-Host "Brak Lib\New-CMTOtherEntityIdMaps.ps1" -ForegroundColor Red
+                pause
+                break
+            }
+            if (-not (Test-Path $configPath)) {
+                Write-Host "Brak Config\CMTConfig.ps1 (Polaczenia.txt: Zrodlo + Cel)." -ForegroundColor Red
+                pause
+                break
+            }
+            $allOk = $true
+            try {
+                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                $psi.FileName = 'powershell.exe'
+                $psi.UseShellExecute = $false
+                $psi.CreateNoWindow = $false
+                $psi.WorkingDirectory = $scriptRoot
+                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$leadMapScript`" -ConfigPath `"$configPath`""
+                $p = [System.Diagnostics.Process]::Start($psi)
+                $p.WaitForExit()
+                if ($p.ExitCode -ne 0) {
+                    Write-Host "Lead IdMap: kod wyjscia $($p.ExitCode)" -ForegroundColor Yellow
+                    $allOk = $false
+                }
+                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$otherMapScript`" -ConfigPath `"$configPath`""
+                $p = [System.Diagnostics.Process]::Start($psi)
+                $p.WaitForExit()
+                if ($p.ExitCode -ne 0) {
+                    Write-Host "IdMap szans/kontaktow/kont: kod wyjscia $($p.ExitCode)" -ForegroundColor Yellow
+                    $allOk = $false
+                }
+                if ($allOk) {
+                    Write-Host "Wszystkie IdMap (Lead, Szanse, Kontakty, Konta) zapisane w Output. Przy opcji 3 mozesz wlaczyc/wylaczyc kazde z osobna." -ForegroundColor Green
+                }
+            } catch {
+                Add-MenuLog ('BLAD opcja 7: ' + $_)
+                Write-Host ('BLAD: ' + $_) -ForegroundColor Red
+            }
+            pause
+        }
         '0' { Add-MenuLog -NoConsole 'Wyjscie'; exit 0 }
-        default { Write-Host 'Wybierz 0, 1, 2, 3, 4, 5 lub 6.' -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
+        default { Write-Host 'Wybierz 0-7.' -ForegroundColor Yellow; Start-Sleep -Seconds 2 }
     }
 } while ($true)
 Add-MenuLog -NoConsole 'Koniec sesji'

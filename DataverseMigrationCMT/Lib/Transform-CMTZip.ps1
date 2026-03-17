@@ -1,6 +1,7 @@
 # Przetwarza zip CMT: podmiana ownerow (IdMap), zachowanie dat, usuniecie pol nieistniejacych w celu.
-# Uzycie: .\Transform-CMTZip.ps1 -InputZipPath C:\...\CMT_Export.zip [-OutputZipPath ...] [-IdMapPath ...] [-TargetConnectionString ...] [-StripFieldsNotInTarget]
+# Uzycie: .\Transform-CMTZip.ps1 -InputZipPath C:\...\CMT_Export.zip [-OutputZipPath ...] [-IdMapPath ...] [-NoLeadIdMap] [-TargetConnectionString ...] [-StripFieldsNotInTarget]
 # Albo: -ConfigPath ...\CMTConfig.ps1 (wtedy cel i StripFieldsNotInTarget z configu - zalecane przy uruchomieniu z menu).
+# -NoLeadIdMap, -NoOpportunityIdMap, -NoContactIdMap, -NoAccountIdMap: nie ladowac danego IdMap (przy pelnej paczce z ta encja).
 # Zasada: w stringach tylko ASCII - cudzyslowy " i ', myslnik - (nie en-dash). Zapobiega bledom parsera.
 
 [CmdletBinding()]
@@ -16,7 +17,15 @@ param(
     [Parameter(Mandatory = $false)]
     [switch] $StripFieldsNotInTarget,
     [Parameter(Mandatory = $false)]
-    [string] $ConfigPath
+    [string] $ConfigPath,
+    [Parameter(Mandatory = $false)]
+    [switch] $NoLeadIdMap,
+    [Parameter(Mandatory = $false)]
+    [switch] $NoOpportunityIdMap,
+    [Parameter(Mandatory = $false)]
+    [switch] $NoContactIdMap,
+    [Parameter(Mandatory = $false)]
+    [switch] $NoAccountIdMap
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,11 +125,79 @@ if (-not [string]::IsNullOrWhiteSpace($IdMapPath) -and (Test-Path $IdMapPath -Pa
     Write-Host "Brak IdMap - bez podmiany ownerow. Uzyj opcji 2 (User Map) w menu."
 }
 
+$idMapDir = $null
+if (-not [string]::IsNullOrWhiteSpace($IdMapPath) -and (Test-Path $IdMapPath -PathType Leaf)) {
+    $idMapDir = [System.IO.Path]::GetDirectoryName($IdMapPath)
+}
+# IdMap lead (objectid w uwagach): zrodlo -> cel - dolacz do guidMap (pomin przy -NoLeadIdMap)
+if (-not $NoLeadIdMap -and $idMapDir) {
+    $leadIdMapPath = Join-Path $idMapDir 'CMT_IdMap_Lead.json'
+    if (Test-Path $leadIdMapPath -PathType Leaf) {
+        try {
+            $jsonLead = [System.IO.File]::ReadAllText($leadIdMapPath, [System.Text.Encoding]::UTF8)
+            $rawLead = $jsonLead | ConvertFrom-Json
+            $added = 0
+            if ($rawLead -is [PSCustomObject]) {
+                $rawLead.PSObject.Properties | ForEach-Object {
+                    $val = $_.Value
+                    if ($val -match '=([0-9a-fA-F\-]{36})$') { $val = $Matches[1] }
+                    elseif ($val -match '^\{?([0-9a-fA-F\-]{36})\}?$') { $val = $Matches[1] }
+                    $pureKey = Get-PureGuidFromIdMapKey -Key $_.Name
+                    if (-not [string]::IsNullOrWhiteSpace($pureKey) -and -not [string]::IsNullOrWhiteSpace($val)) {
+                        $guidMap[$pureKey] = $val
+                        $added++
+                    }
+                }
+            }
+            if ($added -gt 0) {
+                Write-Host "Zaladowano IdMap lead (objectid): $added mapowan z CMT_IdMap_Lead.json."
+            }
+        } catch {
+            Write-Host "Nie udalo sie zaladowac CMT_IdMap_Lead.json: $($_.Message)" -ForegroundColor Yellow
+        }
+    }
+} elseif ($NoLeadIdMap) {
+    Write-Host "Pomijam mapowanie leadow (podano -NoLeadIdMap)." -ForegroundColor Gray
+}
+# Zapamietaj na pozniej: czy zip moze zawierac uwagi (do ostrzezenia po rozpakowaniu)
+$script:WarnAnnotationNoLeadIdMap = $NoLeadIdMap
+
+function Merge-EntityIdMapIntoGuidMap {
+    param([string]$FilePath, [string]$DisplayName, [switch]$Skip)
+    if ($Skip -or -not $idMapDir -or -not (Test-Path $FilePath -PathType Leaf)) { return }
+    try {
+        $json = [System.IO.File]::ReadAllText($FilePath, [System.Text.Encoding]::UTF8)
+        $raw = $json | ConvertFrom-Json
+        $added = 0
+        if ($raw -is [PSCustomObject]) {
+            $raw.PSObject.Properties | ForEach-Object {
+                $val = $_.Value
+                if ($val -match '=([0-9a-fA-F\-]{36})$') { $val = $Matches[1] }
+                elseif ($val -match '^\{?([0-9a-fA-F\-]{36})\}?$') { $val = $Matches[1] }
+                $pureKey = Get-PureGuidFromIdMapKey -Key $_.Name
+                if (-not [string]::IsNullOrWhiteSpace($pureKey) -and -not [string]::IsNullOrWhiteSpace($val)) {
+                    $guidMap[$pureKey] = $val
+                    $added++
+                }
+            }
+        }
+        if ($added -gt 0) { Write-Host "Zaladowano IdMap $DisplayName : $added mapowan." }
+    } catch {
+        Write-Host "Nie udalo sie zaladowac $DisplayName : $($_.Message)" -ForegroundColor Yellow
+    }
+}
+
+Merge-EntityIdMapIntoGuidMap -FilePath (Join-Path $idMapDir 'CMT_IdMap_Opportunity.json') -DisplayName 'szanse (opportunity)' -Skip:$NoOpportunityIdMap
+if ($NoOpportunityIdMap) { Write-Host "Pomijam mapowanie szans (podano -NoOpportunityIdMap)." -ForegroundColor Gray }
+Merge-EntityIdMapIntoGuidMap -FilePath (Join-Path $idMapDir 'CMT_IdMap_Contact.json') -DisplayName 'kontakty (contact)' -Skip:$NoContactIdMap
+if ($NoContactIdMap) { Write-Host "Pomijam mapowanie kontaktow (podano -NoContactIdMap)." -ForegroundColor Gray }
+Merge-EntityIdMapIntoGuidMap -FilePath (Join-Path $idMapDir 'CMT_IdMap_Account.json') -DisplayName 'konta (account)' -Skip:$NoAccountIdMap
+if ($NoAccountIdMap) { Write-Host "Pomijam mapowanie kont (podano -NoAccountIdMap)." -ForegroundColor Gray }
+
 # IdMap po imieniu i nazwisku (gdy CMT eksportuje ownerid jako tekst, nie GUID)
 $displayNameToGuid = @{}
 $byDisplayNamePath = $null
-if (-not [string]::IsNullOrWhiteSpace($IdMapPath) -and (Test-Path $IdMapPath -PathType Leaf)) {
-    $idMapDir = [System.IO.Path]::GetDirectoryName($IdMapPath)
+if ($idMapDir) {
     $byDisplayNamePath = Join-Path $idMapDir 'CMT_IdMap_ByDisplayName.json'
 }
 if ($null -ne $byDisplayNamePath -and (Test-Path $byDisplayNamePath -PathType Leaf)) {
@@ -140,7 +217,7 @@ if ($null -ne $byDisplayNamePath -and (Test-Path $byDisplayNamePath -PathType Le
 $script:targetAllowedAttrs = @{}
 $script:connTarget = $null
 
-# Klucz cache metadanych (zgodny z Export-TargetMetadataCache) – po URL celu
+# Klucz cache metadanych (zgodny z Export-TargetMetadataCache) - po URL celu
 function Get-TargetMetadataCacheKeyFromConnStr {
     param([string]$ConnectionString)
     if ([string]::IsNullOrWhiteSpace($ConnectionString)) { return '' }
@@ -175,6 +252,7 @@ $script:ownerReplaceCount = 0
 $script:DuplicateRecordsRemovedCount = 0
 $script:LookupFieldsStrippedCount = 0
 $script:DuplicateOverrideRemovedCount = 0
+$script:AnnotationRecordsSkippedNoParentCount = 0
 $script:OptionSetIssues = [System.Collections.ArrayList]::new()
 $script:TargetOptionSetAllowed = @{}
 $script:OptionSetInteractiveChoice = @{}
@@ -184,7 +262,7 @@ $script:SourceOptionSetCache = @{}
 $script:EntitiesFoundInZip = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $script:MetadataCacheLoaded = $false
 
-# Zaladuj cache metadanych celu (po inicjalizacji TargetOptionSetAllowed) – opcja 5 zapisuje, tu odczyt
+# Zaladuj cache metadanych celu (po inicjalizacji TargetOptionSetAllowed) - opcja 5 zapisuje, tu odczyt
 $outputDirForCache = [System.IO.Path]::GetDirectoryName($OutputZipPath)
 if ([string]::IsNullOrWhiteSpace($outputDirForCache)) { $outputDirForCache = (Get-Location).Path }
 if (-not [string]::IsNullOrWhiteSpace($TargetConnectionString)) {
@@ -509,8 +587,38 @@ function Convert-CMTXmlContent {
             foreach ($dup in $duplicatesToRemove) {
                 if ($dup.ParentNode) { [void]$dup.ParentNode.RemoveChild($dup); $changed = $true; $script:DuplicateRecordsRemovedCount++ }
             }
+            # Uwagi (annotation): usun rekordy, ktorych objectid wskazuje na lead/szanse/konto/kontakt nieobecny w celu (brak w IdMap)
+            $annotationRecordsToRemove = [System.Collections.ArrayList]::new()
+            if ([string]::Equals($en, 'annotation', [StringComparison]::OrdinalIgnoreCase) -and $guidMap.Count -gt 0) {
+                $validParentGuids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+                foreach ($v in $guidMap.Values) { [void]$validParentGuids.Add([string]$v) }
+                foreach ($rec in $recordNodes) {
+                    if ($duplicatesToRemove -contains $rec) { continue }
+                    $objectIdVal = $rec.GetAttribute('objectid'); if ([string]::IsNullOrWhiteSpace($objectIdVal)) { $objectIdVal = $rec.GetAttribute('ObjectId') }
+                    if ([string]::IsNullOrWhiteSpace($objectIdVal)) {
+                        foreach ($n in $rec.SelectNodes('.//*[@name or @Name]')) {
+                            $fn = $n.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $n.GetAttribute('Name') }
+                            if ($fn -eq 'objectid') {
+                                $objectIdVal = $n.InnerText.Trim(); if ([string]::IsNullOrWhiteSpace($objectIdVal)) { $objectIdVal = $n.GetAttribute('value'); if ([string]::IsNullOrWhiteSpace($objectIdVal)) { $objectIdVal = $n.GetAttribute('Value') } }
+                                break
+                            }
+                        }
+                    }
+                    if ([string]::IsNullOrWhiteSpace($objectIdVal)) { continue }
+                    if ($objectIdVal -match '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})') {
+                        $objectGuid = $Matches[1].Trim()
+                        if (-not $validParentGuids.Contains($objectGuid)) {
+                            [void]$annotationRecordsToRemove.Add($rec)
+                        }
+                    }
+                }
+                foreach ($ar in $annotationRecordsToRemove) {
+                    if ($ar.ParentNode) { [void]$ar.ParentNode.RemoveChild($ar); $changed = $true; $script:AnnotationRecordsSkippedNoParentCount++ }
+                }
+            }
             foreach ($rec in $recordNodes) {
                 if ($duplicatesToRemove -contains $rec) { continue }
+                if ($annotationRecordsToRemove -and $annotationRecordsToRemove -contains $rec) { continue }
                 # Zduplikowane overriddencreatedon (bug eksportu) - zostaw tylko pierwsze
                 $overrideDupNodes = @($rec.SelectNodes('.//*[@name or @Name]') | Where-Object {
                     $fn = $_.GetAttribute('name'); if ([string]::IsNullOrWhiteSpace($fn)) { $fn = $_.GetAttribute('Name') }
@@ -797,6 +905,20 @@ $tempDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString('N'))
 try {
     [System.IO.Compression.ZipFile]::ExtractToDirectory($InputZipPath, $tempDir)
     $files = Get-ChildItem -Path $tempDir -Recurse -File
+    if ($script:WarnAnnotationNoLeadIdMap) {
+        $dataXml = $files | Where-Object { $_.Name -eq 'data.xml' } | Select-Object -First 1
+        if ($dataXml -and $dataXml.Length -lt (20 * 1024 * 1024)) {
+            try {
+                $preview = [System.IO.File]::ReadAllText($dataXml.FullName, [System.Text.Encoding]::UTF8).Substring(0, [Math]::Min(50000, [int]$dataXml.Length))
+                if ($preview -match 'name\s*=\s*["'']annotation["'']') {
+                    Write-Host ""
+                    Write-Host "UWAGA: Ten zip zawiera encje Uwaga (annotation). Mapowanie leadow jest WYLACZONE (-NoLeadIdMap)." -ForegroundColor Red
+                    Write-Host "Import w CMT konczy sie bledem 'The parent object type was present, but the ID was missing'. Uruchom opcje 3 ponownie i wybierz T przy pytaniu o mapowanie leadow." -ForegroundColor Red
+                    Write-Host ""
+                }
+            } catch { }
+        }
+    }
     if ($guidMap.Count -gt 0) {
         $foundGuids = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         foreach ($f in $files) {
@@ -864,6 +986,7 @@ try {
     if ($script:DuplicateOverrideRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateOverrideRemovedCount + ' zduplikowanych pol overriddencreatedon w rekordach (bug eksportu).') -ForegroundColor Gray }
     if ($script:LookupFieldsStrippedCount -gt 0) { Write-Host ('Usunieto ' + $script:LookupFieldsStrippedCount + ' pol lookup (msdyn_contactkpiid, msdyn_accountkpiid, transactioncurrencyid, originatingleadid) - brak w celu.') -ForegroundColor Gray }
     if ($script:DuplicateRecordsRemovedCount -gt 0) { Write-Host ('Usunieto ' + $script:DuplicateRecordsRemovedCount + ' zduplikowanych rekordow (ten sam klucz glowny) - zapobiega bledowi CMT: Element o tym samym kluczu.') -ForegroundColor Gray }
+    if ($script:AnnotationRecordsSkippedNoParentCount -gt 0) { Write-Host ('Pominieto ' + $script:AnnotationRecordsSkippedNoParentCount + ' uwag (annotation) - rekord nadrzędny (lead/szansa/konto/kontakt) nie istnieje w systemie docelowym.') -ForegroundColor Yellow }
     if ($guidMap.Count -gt 0 -or $displayNameToGuid.Count -gt 0) {
         Write-Host 'Podmiana ownerow: ' -NoNewline -ForegroundColor Gray
         if ($guidMap.Count -gt 0) { Write-Host ('IdMap GUID ' + $guidMap.Count + '; ') -NoNewline -ForegroundColor Gray }

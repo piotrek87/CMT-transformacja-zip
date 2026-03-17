@@ -2,6 +2,10 @@
 
 Zmiany w projekcie narzędzia migracyjnego Dataverse.
 
+## 2026-03-17
+
+- **Punkt powrotu: uwagi (annotation) – 17 pominiętych, import bez błędów** – Tag `restore-uwagi-pominiete-2026-03-17`. Transform usuwa z paczki uwagi, których objectid wskazuje na lead/szansę/konto/kontakt nieobecny w celu (brak w IdMap); raport „Pominieto X uwag…”. Ostrzeżenie w Transform przy -NoLeadIdMap i zipie z encją annotation; podpowiedź w menu przy zipie z „annotation” w nazwie – wybierz T przy mapowaniu leadów. (piotrek87)
+
 ## 2026-03-16
 
 - **Punkt powrotu: Uwagi (annotation) z oryginalną datą OK** – Tag `restore-uwagi-daty-2026-03-16`. Przepływ: opcja 3 (Transform) potem opcja 6 (Popraw daty Uwag); daty w ISO 8601; Inject używa dat z zipa gdy źródło nie zwraca rekordu; naprawa parsera (ASCII w stringach); reguła powershell-ascii-strings alwaysApply. (piotrek87)
